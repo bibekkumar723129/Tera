@@ -1,0 +1,24 @@
+"""
+Configuration module for Terabox Downloader Bot
+"""
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Telegram Bot Configuration
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN environment variable is required")
+
+# API Configuration
+TERABOX_API = "https://iteraplay.com/api/play.php?url={url}&key=iTeraPlay2025"
+
+# Download Configuration
+DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "./downloads")
+MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", 2147483648))  # 2GB default
+TIMEOUT = int(os.getenv("TIMEOUT", 30))
+
+# Bot Configuration
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

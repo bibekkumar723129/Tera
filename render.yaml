@@ -1,0 +1,11 @@
+services:
+  - type: background
+    name: tera-telegram-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    # Optional: Provide envVars here, or set them in the Render dashboard as secrets
+    # envVars:
+    #   - key: BOT_TOKEN
+    #     value: "${BOT_TOKEN}"

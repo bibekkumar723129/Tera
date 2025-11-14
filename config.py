@@ -12,6 +12,16 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable is required")
 
+# MongoDB Configuration
+MONGODB_URL = os.getenv("MONGODB_URL")
+if not MONGODB_URL:
+    raise ValueError("MONGODB_URL environment variable is required")
+
+MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "terabox_bot")
+
+# Admin Configuration (for sending restart notifications)
+ADMIN_ID = os.getenv("ADMIN_ID")
+
 # API Configuration
 TERABOX_API = "https://iteraplay.com/api/play.php?url={url}&key=iTeraPlay2025"
 

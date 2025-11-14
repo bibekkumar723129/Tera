@@ -9,6 +9,7 @@ from pathlib import Path
 
 import config
 from src.handlers.bot import create_bot
+from src.database import db
 
 # Configure logging
 logging.basicConfig(
@@ -37,6 +38,12 @@ class BotManager:
         Path(config.DOWNLOAD_DIR).mkdir(parents=True, exist_ok=True)
         logger.info(f"Download directory: {config.DOWNLOAD_DIR}")
         
+        # Connect to MongoDB
+        if db.connect():
+            logger.info("MongoDB connected successfully")
+        else:
+            logger.warning("Failed to connect to MongoDB - database features will be unavailable")
+        
         # Create bot instance
         self.bot = create_bot(config.BOT_TOKEN)
         logger.info("Bot instance created")
@@ -48,6 +55,10 @@ class BotManager:
         
         self.running = True
         logger.info("Starting bot...")
+        
+        # Send restart notification to all users and admin
+        if self.bot:
+            await self.bot.notify_restart()
         
         try:
             await self.bot.start()
@@ -68,6 +79,9 @@ class BotManager:
         
         if self.bot:
             await self.bot.stop()
+        
+        # Disconnect from MongoDB
+        db.disconnect()
         
         logger.info("Bot shutdown complete")
 

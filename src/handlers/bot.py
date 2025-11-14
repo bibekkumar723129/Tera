@@ -18,6 +18,7 @@ from typing import Optional
 
 import config
 from src.handlers.download import process_terabox_link
+from src.database import db
 
 # Configure logging
 logging.basicConfig(
@@ -39,8 +40,21 @@ class TeraboxBot:
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[int]:
         """Handle /start command"""
-        welcome_message = """
+        user = update.message.from_user
+        user_id = user.id
+        
+        # Add user to database
+        db.add_user(
+            user_id=user_id,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            username=user.username
+        )
+        
+        welcome_message = f"""
 🎬 Welcome to Terabox Video Downloader Bot!
+
+👋 Hello {user.first_name}!
 
 I can help you download videos from Terabox links.
 
@@ -52,6 +66,7 @@ I can help you download videos from Terabox links.
 ✅ Download video files
 ✅ Automatic format detection
 ✅ Direct Telegram upload (when size permits)
+✅ Download history tracking
 
 🔒 Privacy: Links are processed but not stored.
 
@@ -160,6 +175,9 @@ Use /help for more information.
             except Exception as e:
                 logger.warning(f"Failed to clean up {file_path}: {e}")
             
+            # Increment download count in database
+            db.increment_download_count(user_id)
+            
             await processing_msg.delete()
             
         except Exception as e:
@@ -231,6 +249,67 @@ Use /help for more information.
             await self.app.stop()
             await self.app.shutdown()
             logger.info("Bot stopped")
+    
+    async def notify_restart(self) -> None:
+        """Notify all users and admin about bot restart"""
+        if not self.app:
+            return
+        
+        try:
+            logger.info("Sending restart notifications to users...")
+            
+            # Get all user IDs from database
+            user_ids = db.get_all_user_ids()
+            
+            restart_message = """
+✅ **Bot Restarted**
+
+The Terabox Video Downloader Bot has been restarted and is now online!
+
+🚀 Ready to process your download requests.
+
+Use /start to get started!
+            """
+            
+            # Send to all users
+            sent_count = 0
+            for user_id in user_ids:
+                try:
+                    await self.app.bot.send_message(
+                        chat_id=user_id,
+                        text=restart_message,
+                        parse_mode='Markdown'
+                    )
+                    sent_count += 1
+                except Exception as e:
+                    logger.debug(f"Failed to send restart message to {user_id}: {e}")
+            
+            logger.info(f"Restart notification sent to {sent_count} users")
+            
+            # Send to admin if configured
+            if config.ADMIN_ID:
+                try:
+                    admin_message = f"""
+✅ **Bot Restarted**
+
+The Terabox Video Downloader Bot has been restarted successfully!
+
+📊 **Stats:**
+• Total users: {db.get_total_users()}
+• Notifications sent: {sent_count}
+
+🚀 Bot is now online and ready!
+                    """
+                    await self.app.bot.send_message(
+                        chat_id=int(config.ADMIN_ID),
+                        text=admin_message,
+                        parse_mode='Markdown'
+                    )
+                    logger.info(f"Restart notification sent to admin {config.ADMIN_ID}")
+                except Exception as e:
+                    logger.error(f"Failed to send restart message to admin: {e}")
+        except Exception as e:
+            logger.error(f"Error sending restart notifications: {e}")
 
 
 def create_bot(token: str) -> TeraboxBot:

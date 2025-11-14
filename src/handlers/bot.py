@@ -3,6 +3,7 @@ Main Telegram bot handler for Terabox video downloader
 """
 import logging
 import os
+import re
 from pathlib import Path
 from telegram import Update, BotCommand
 from telegram.ext import (
@@ -14,7 +15,8 @@ from telegram.ext import (
     ConversationHandler,
 )
 from telegram.constants import ChatAction
-from typing import Optional
+from typing import Optional, List
+from urllib.parse import urlparse
 
 import config
 from src.handlers.download import process_terabox_link
@@ -101,8 +103,30 @@ Use /help for more information.
         await update.message.reply_text("Operation cancelled. Send another link or use /start")
         return ConversationHandler.END
     
+    def extract_terabox_links(self, text: str) -> List[str]:
+        """Extract all Terabox links from text
+        Handles:
+        - Multiple links in one message
+        - Links mixed with other text
+        - Different Terabox URL formats
+        """
+        # Pattern for terabox URLs
+        terabox_pattern = r'https?://(?:www\.)?terabox(?:link)?\.com/(?:s|folder)/[a-zA-Z0-9_-]+'
+        
+        links = re.findall(terabox_pattern, text, re.IGNORECASE)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_links = []
+        for link in links:
+            if link not in seen:
+                seen.add(link)
+                unique_links.append(link)
+        
+        return unique_links
+    
     async def handle_link(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[int]:
-        """Handle incoming Terabox link"""
+        """Handle incoming message with Terabox links"""
         user_message = update.message.text.strip()
         user_id = update.message.from_user.id
         
@@ -111,74 +135,140 @@ Use /help for more information.
         # Show typing indicator
         await update.message.chat.send_action(ChatAction.TYPING)
         
-        # Validate basic URL structure
-        if not user_message.startswith('http'):
+        # Extract all Terabox links from the message
+        links = self.extract_terabox_links(user_message)
+        
+        if not links:
             await update.message.reply_text(
-                "❌ Please send a valid URL starting with http:// or https://"
+                "❌ No Terabox links found in your message.\n\n"
+                "Please send a valid Terabox URL like:\n"
+                "https://terabox.com/s/..."
             )
             return WAITING_FOR_LINK
         
+        logger.info(f"Extracted {len(links)} link(s) from message")
+        
         # Show processing message
-        processing_msg = await update.message.reply_text(
-            "⏳ Processing your link...\n"
-            "Fetching stream information..."
-        )
+        link_count = len(links)
+        if link_count > 1:
+            processing_msg = await update.message.reply_text(
+                f"⏳ Processing {link_count} links...\n"
+                f"Fetching stream information..."
+            )
+        else:
+            processing_msg = await update.message.reply_text(
+                "⏳ Processing your link...\n"
+                "Fetching stream information..."
+            )
         
         try:
-            # Process the link
-            file_path, filename = await process_terabox_link(user_message)
+            # Process all extracted links
+            successful_downloads = 0
+            failed_links = []
             
-            if not file_path:
-                await processing_msg.edit_text(
-                    "❌ Failed to process the link.\n\n"
-                    "Possible reasons:\n"
-                    "• Invalid Terabox link\n"
-                    "• Link has expired\n"
-                    "• Video is no longer available\n"
-                    "• API service is unavailable\n\n"
-                    "Please try another link."
-                )
+            for idx, link in enumerate(links, 1):
+                try:
+                    # Update progress for multiple links
+                    if link_count > 1:
+                        await processing_msg.edit_text(
+                            f"⏳ Processing {link_count} links...\n"
+                            f"({idx}/{link_count}) Processing: {link[:30]}..."
+                        )
+                    
+                    logger.info(f"Processing link {idx}/{link_count}: {link}")
+                    
+                    # Process the link
+                    file_path, filename = await process_terabox_link(link)
+                    
+                    if not file_path:
+                        logger.warning(f"Failed to process link: {link}")
+                        failed_links.append(link)
+                        continue
+                    
+                    # Check file size before sending
+                    file_size = os.path.getsize(file_path)
+                    file_size_mb = file_size / (1024 * 1024)
+                    
+                    if file_size_mb > 2000:  # Telegram API limit is 2000MB for bots
+                        logger.warning(f"File too large for {link}: {file_size_mb:.1f}MB")
+                        failed_links.append(link)
+                        try:
+                            os.remove(file_path)
+                        except:
+                            pass
+                        continue
+                    
+                    # Update message to show uploading status
+                    if link_count > 1:
+                        await processing_msg.edit_text(
+                            f"✅ Download complete ({idx}/{link_count})!\n"
+                            f"📤 Uploading to Telegram ({file_size_mb:.1f}MB)..."
+                        )
+                    else:
+                        await processing_msg.edit_text(
+                            f"✅ Download complete!\n"
+                            f"📤 Uploading to Telegram ({file_size_mb:.1f}MB)...\n"
+                            f"This may take a moment..."
+                        )
+                    
+                    await update.message.chat.send_action(ChatAction.UPLOAD_VIDEO)
+                    
+                    # Send video to user
+                    with open(file_path, 'rb') as video_file:
+                        sent_message = await update.message.reply_video(
+                            video=video_file,
+                            caption=f"📹 {filename}\nSize: {file_size_mb:.1f}MB",
+                            write_timeout=300
+                        )
+                    
+                    # Forward to store channel if configured
+                    if config.STORE_CHANNEL:
+                        try:
+                            with open(file_path, 'rb') as video_file:
+                                await self.app.bot.send_video(
+                                    chat_id=config.STORE_CHANNEL,
+                                    video=video_file,
+                                    caption=f"📹 {filename}\nUser: {update.message.from_user.mention_html()}\nSize: {file_size_mb:.1f}MB",
+                                    parse_mode='HTML',
+                                    write_timeout=300
+                                )
+                            logger.info(f"Forwarded to store channel: {filename}")
+                        except Exception as e:
+                            logger.warning(f"Failed to forward to store channel: {e}")
+                    
+                    # Clean up the file
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"Cleaned up: {file_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to clean up {file_path}: {e}")
+                    
+                    # Increment download count in database
+                    db.increment_download_count(user_id)
+                    successful_downloads += 1
+                    
+                except Exception as e:
+                    logger.error(f"Error processing link {link}: {e}")
+                    failed_links.append(link)
+            
+            # Final status message
+            if successful_downloads > 0:
+                status_msg = f"✅ Successfully downloaded {successful_downloads}/{link_count} video(s)"
+                if failed_links:
+                    status_msg += f"\n❌ Failed links: {len(failed_links)}"
+                await processing_msg.edit_text(status_msg)
+            elif failed_links:
+                error_msg = "❌ Failed to process the link(s).\n\nPossible reasons:\n"
+                error_msg += "• Invalid Terabox links\n"
+                error_msg += "• Links have expired\n"
+                error_msg += "• Videos are no longer available\n"
+                error_msg += "• API service is unavailable\n\n"
+                error_msg += "Please try another link."
+                await processing_msg.edit_text(error_msg)
                 return WAITING_FOR_LINK
-            
-            # Check file size before sending
-            file_size = os.path.getsize(file_path)
-            file_size_mb = file_size / (1024 * 1024)
-            
-            if file_size_mb > 2000:  # Telegram API limit is 2000MB for bots
-                await processing_msg.edit_text(
-                    f"⚠️ File is too large ({file_size_mb:.1f}MB) to send via Telegram.\n\n"
-                    f"File saved at: {file_path}"
-                )
+            else:
+                await processing_msg.edit_text("❌ No links could be processed.")
                 return WAITING_FOR_LINK
-            
-            # Update message to show uploading status
-            await processing_msg.edit_text(
-                f"✅ Download complete!\n"
-                f"📤 Uploading to Telegram ({file_size_mb:.1f}MB)...\n"
-                f"This may take a moment..."
-            )
-            
-            await update.message.chat.send_action(ChatAction.UPLOAD_VIDEO)
-            
-            # Send video to user
-            with open(file_path, 'rb') as video_file:
-                await update.message.reply_video(
-                    video=video_file,
-                    caption=f"📹 {filename}\nSize: {file_size_mb:.1f}MB",
-                    write_timeout=300
-                )
-            
-            # Clean up the file
-            try:
-                os.remove(file_path)
-                logger.info(f"Cleaned up: {file_path}")
-            except Exception as e:
-                logger.warning(f"Failed to clean up {file_path}: {e}")
-            
-            # Increment download count in database
-            db.increment_download_count(user_id)
-            
-            await processing_msg.delete()
             
         except Exception as e:
             logger.error(f"Error processing link: {e}")

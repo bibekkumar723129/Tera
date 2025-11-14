@@ -22,6 +22,9 @@ MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "terabox_bot")
 # Admin Configuration (for sending restart notifications)
 ADMIN_ID = os.getenv("ADMIN_ID")
 
+# Store Channel Configuration (for archiving all downloads)
+STORE_CHANNEL = os.getenv("STORE_CHANNEL", "-1003292407667")
+
 # API Configuration
 TERABOX_API = "https://iteraplay.com/api/play.php?url={url}&key=iTeraPlay2025"
 

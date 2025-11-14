@@ -1,27 +1,26 @@
 nohup: ignoring input
-2025-11-14 16:07:02,033 - __main__ - INFO - ==================================================
-2025-11-14 16:07:02,033 - __main__ - INFO - Terabox Video Downloader Bot
-2025-11-14 16:07:02,034 - __main__ - INFO - ==================================================
-2025-11-14 16:07:02,034 - __main__ - INFO - Initializing Terabox Downloader Bot...
-2025-11-14 16:07:02,034 - __main__ - INFO - Download directory: ./downloads
-2025-11-14 16:07:03,556 - src.database - INFO - Successfully connected to MongoDB
-2025-11-14 16:07:03,557 - __main__ - INFO - MongoDB connected successfully
-2025-11-14 16:07:03,557 - __main__ - INFO - Bot instance created
-2025-11-14 16:07:03,557 - __main__ - INFO - Starting bot and HTTP server...
-2025-11-14 16:07:03,558 - __main__ - INFO - HTTP server will listen on port 8000
-2025-11-14 16:07:03,558 - __main__ - INFO - HTTP server started on 0.0.0.0:8000
-2025-11-14 16:07:04,476 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/setMyCommands "HTTP/1.1 200 OK"
-2025-11-14 16:07:04,477 - src.handlers.bot - INFO - Starting bot...
-2025-11-14 16:07:04,646 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getMe "HTTP/1.1 200 OK"
-2025-11-14 16:07:04,647 - apscheduler.scheduler - INFO - Scheduler started
-2025-11-14 16:07:04,647 - telegram.ext.Application - INFO - Application started
-2025-11-14 16:07:04,819 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/deleteWebhook "HTTP/1.1 200 OK"
-2025-11-14 16:07:04,820 - src.handlers.bot - INFO - Bot is running!
-2025-11-14 16:07:05,473 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"
-2025-11-14 16:07:15,703 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"
-2025-11-14 16:07:25,913 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"
-2025-11-14 16:07:36,119 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"
-2025-11-14 16:07:36,386 - aiohttp.access - INFO - 127.0.0.1 [14/Nov/2025:16:07:36 +0000] "GET /health HTTP/1.1" 200 202 "-" "curl/8.5.0"
-2025-11-14 16:07:46,323 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"
-2025-11-14 16:07:56,527 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"
-2025-11-14 16:08:06,752 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"
+2025-11-14 16:31:02,521 - __main__ - INFO - ==================================================
+2025-11-14 16:31:02,521 - __main__ - INFO - Terabox Video Downloader Bot
+2025-11-14 16:31:02,521 - __main__ - INFO - ==================================================
+2025-11-14 16:31:02,522 - __main__ - INFO - Initializing Terabox Downloader Bot...
+2025-11-14 16:31:02,522 - __main__ - INFO - Download directory: ./downloads
+2025-11-14 16:31:02,946 - src.database - INFO - Successfully connected to MongoDB
+2025-11-14 16:31:02,946 - __main__ - INFO - MongoDB connected successfully
+2025-11-14 16:31:02,946 - __main__ - INFO - Bot instance created
+2025-11-14 16:31:02,947 - __main__ - INFO - Starting bot and HTTP server...
+2025-11-14 16:31:02,947 - __main__ - INFO - HTTP server will listen on port 8000
+2025-11-14 16:31:02,947 - __main__ - INFO - HTTP server started on 0.0.0.0:8000
+2025-11-14 16:31:03,795 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/setMyCommands "HTTP/1.1 200 OK"
+2025-11-14 16:31:03,796 - src.handlers.bot - INFO - Starting bot...
+2025-11-14 16:31:03,972 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getMe "HTTP/1.1 200 OK"
+2025-11-14 16:31:03,973 - apscheduler.scheduler - INFO - Scheduler started
+2025-11-14 16:31:03,973 - telegram.ext.Application - INFO - Application started
+2025-11-14 16:31:04,153 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/deleteWebhook "HTTP/1.1 200 OK"
+2025-11-14 16:31:04,153 - src.handlers.bot - INFO - Bot is running!
+2025-11-14 16:31:14,719 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"
+2025-11-14 16:31:24,897 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"
+2025-11-14 16:31:35,074 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"
+2025-11-14 16:31:45,248 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"
+2025-11-14 16:31:55,428 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"
+2025-11-14 16:32:05,605 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"
+2025-11-14 16:32:15,781 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8066563770:AAHp45lJeC_5zeNswwkTm8Nw7hvDByv07Cc/getUpdates "HTTP/1.1 200 OK"

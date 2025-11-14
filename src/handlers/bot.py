@@ -109,10 +109,12 @@ Use /help for more information.
         Handles:
         - Multiple links in one message
         - Links mixed with other text
-        - Different Terabox URL formats
+        - Different Terabox URL formats (terabox.com, 1024terabox.com, teraboxlink.com, etc.)
+        - Both /s/ (share) and /folder/ links
         """
-        # Pattern for terabox URLs
-        terabox_pattern = r'https?://(?:www\.)?terabox(?:link)?\.com/(?:s|folder)/[a-zA-Z0-9_-]+'
+        # More flexible pattern that matches any terabox variant domain
+        # Matches: terabox.com, 1024terabox.com, teraboxlink.com, etc.
+        terabox_pattern = r'https?://[a-zA-Z0-9.]*terabox[a-zA-Z0-9.]*\.com/(?:s|folder)/[a-zA-Z0-9_-]+'
         
         links = re.findall(terabox_pattern, text, re.IGNORECASE)
         

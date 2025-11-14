@@ -16,6 +16,7 @@ Terabox video downloader Telegram bot with MongoDB user tracking, restart notifi
 - Python 3.8+
 - Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
 - MongoDB instance (local or MongoDB Atlas cloud)
+- FFmpeg (for M3U8 HLS stream downloads)
 - pip (Python package manager)
 
 ## Local Setup
@@ -27,6 +28,21 @@ cd Tera
 ```
 
 ### 2. Install Dependencies
+
+**Install system dependencies (FFmpeg):**
+```bash
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install ffmpeg
+
+# macOS (with Homebrew)
+brew install ffmpeg
+
+# Windows (with Chocolatey)
+choco install ffmpeg
+```
+
+**Install Python dependencies:**
 ```bash
 pip install -r requirements.txt
 ```

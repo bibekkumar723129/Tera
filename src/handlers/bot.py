@@ -205,11 +205,24 @@ Use /help for more information.
                     except RuntimeError as re_err:
                         # Specific handling for anti-bot detection
                         if 'anti-bot' in str(re_err):
-                            await processing_msg.edit_text(
-                                "⚠️ Extraction failed: the upstream API appears to be protected by anti-bot measures (reCAPTCHA/Cloudflare).\n\n"
-                                "Please try again later or provide a different link."
-                            )
-                            return WAITING_FOR_LINK
+                            logger.warning(f"Anti-bot detected for link {idx}/{link_count}")
+                            failed_links.append(link)
+                            # Update task list with failure
+                            live_list = "📋 **DOWNLOAD TASK LIST**\n"
+                            live_list += "=" * 30 + "\n\n"
+                            for i, l in enumerate(links, 1):
+                                short_l = l[:40] + "..." if len(l) > 40 else l
+                                if i < idx:
+                                    live_list += f"{i}. ✅ {short_l}\n"
+                                elif i == idx:
+                                    live_list += f"{i}. 🚫 {short_l}\n"
+                                else:
+                                    live_list += f"{i}. ⏳ {short_l}\n"
+                            live_list += "\n" + "=" * 30
+                            live_list += f"\n\n⚠️ API protected (reCAPTCHA)\nTrying remaining links..."
+                            await processing_msg.edit_text(live_list)
+                            await asyncio.sleep(1)
+                            continue
                         else:
                             logger.error(f"Runtime error during extraction: {re_err}")
                             failed_links.append(link)
@@ -225,7 +238,7 @@ Use /help for more information.
                                 else:
                                     live_list += f"{i}. ⏳ {short_l}\n"
                             live_list += "\n" + "=" * 30
-                            live_list += f"\n\n❌ Error: Anti-bot protection detected\nContinuing with other links..."
+                            live_list += f"\n\n❌ Error during extraction\nContinuing with other links..."
                             await processing_msg.edit_text(live_list)
                             await asyncio.sleep(1)
                             continue

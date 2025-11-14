@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
 Main entry point for Terabox Downloader Bot
+Includes HTTP server for Render Web Service deployment
 """
 import asyncio
 import logging
 import signal
+import os
 from pathlib import Path
+from aiohttp import web
 
 import config
 from src.handlers.bot import create_bot
@@ -24,14 +27,16 @@ logger = logging.getLogger(__name__)
 
 
 class BotManager:
-    """Manages bot lifecycle"""
+    """Manages bot lifecycle and HTTP server"""
     
     def __init__(self):
         self.bot = None
         self.running = False
+        self.app = None
+        self.runner = None
     
     async def initialize(self):
-        """Initialize the bot"""
+        """Initialize the bot and HTTP server"""
         logger.info("Initializing Terabox Downloader Bot...")
         
         # Create download directory
@@ -47,14 +52,34 @@ class BotManager:
         # Create bot instance
         self.bot = create_bot(config.BOT_TOKEN)
         logger.info("Bot instance created")
+        
+        # Setup HTTP server for Render Web Service
+        self.app = web.Application()
+        self.app.router.add_get('/', self.health_check)
+        self.app.router.add_get('/health', self.health_check)
+    
+    async def health_check(self, request):
+        """Health check endpoint for Render"""
+        return web.json_response({'status': 'ok', 'service': 'terabox-bot'})
     
     async def run(self):
-        """Run the bot"""
+        """Run the bot and HTTP server"""
         if not self.bot:
             await self.initialize()
         
         self.running = True
-        logger.info("Starting bot...")
+        logger.info("Starting bot and HTTP server...")
+        
+        # Get port from environment or use default
+        port = int(os.environ.get('PORT', 8000))
+        logger.info(f"HTTP server will listen on port {port}")
+        
+        # Start HTTP server
+        self.runner = web.AppRunner(self.app)
+        await self.runner.setup()
+        site = web.TCPSite(self.runner, '0.0.0.0', port)
+        await site.start()
+        logger.info(f"HTTP server started on 0.0.0.0:{port}")
         
         # Send restart notification to all users and admin
         if self.bot:
@@ -62,7 +87,7 @@ class BotManager:
         
         try:
             await self.bot.start()
-            # Keep the bot running
+            # Keep running
             while self.running:
                 await asyncio.sleep(1)
         except KeyboardInterrupt:
@@ -73,17 +98,20 @@ class BotManager:
             await self.shutdown()
     
     async def shutdown(self):
-        """Shutdown the bot gracefully"""
-        logger.info("Shutting down bot...")
+        """Shutdown the bot and server gracefully"""
+        logger.info("Shutting down bot and server...")
         self.running = False
         
         if self.bot:
             await self.bot.stop()
         
+        if self.runner:
+            await self.runner.cleanup()
+        
         # Disconnect from MongoDB
         db.disconnect()
         
-        logger.info("Bot shutdown complete")
+        logger.info("Bot and server shutdown complete")
 
 
 async def main():

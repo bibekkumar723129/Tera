@@ -1,11 +1,14 @@
 services:
-  - type: background
+  - type: web
     name: tera-telegram-bot
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && apt-get update && apt-get install -y ffmpeg
     startCommand: python main.py
-    # Optional: Provide envVars here, or set them in the Render dashboard as secrets
-    # envVars:
-    #   - key: BOT_TOKEN
-    #     value: "${BOT_TOKEN}"
+    envVars:
+      - key: PORT
+        value: 8000
+    # Optional: Provide additional secrets in the Render dashboard
+    # - BOT_TOKEN (required)
+    # - MONGODB_URL (required)
+    # - ADMIN_ID (optional)

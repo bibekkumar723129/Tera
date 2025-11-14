@@ -171,6 +171,7 @@ async def fetch_stream_url(terabox_url: str) -> Optional[Tuple[str, str]]:
 async def download_video(stream_url: str, filename: str) -> Optional[str]:
     """
     Download video from stream URL
+    Supports both direct MP4 URLs and M3U8 HLS streams
     Returns: file path if successful, None otherwise
     """
     try:
@@ -180,7 +181,36 @@ async def download_video(stream_url: str, filename: str) -> Optional[str]:
         
         logger.info(f"Starting download: {filename} from {stream_url[:100]}")
         
-        # Headers to mimic a browser and improve compatibility
+        # Check if it's an M3U8 stream (HLS format)
+        is_m3u8 = '.m3u8' in stream_url.lower() or 'playlist' in stream_url.lower()
+        
+        if is_m3u8:
+            # Use FFmpeg for M3U8 streams
+            logger.info("Detected M3U8 stream - using FFmpeg")
+            return await _download_m3u8_with_ffmpeg(stream_url, file_path, filename)
+        else:
+            # Use direct HTTP download for MP4/direct streams
+            logger.info("Detected direct stream - using HTTP download")
+            return await _download_direct_http(stream_url, file_path, filename)
+                    
+    except asyncio.TimeoutError:
+        logger.error("Download timed out")
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        return None
+    except Exception as e:
+        logger.error(f"Error downloading video: {e}", exc_info=True)
+        if 'file_path' in locals() and os.path.exists(file_path):
+            os.remove(file_path)
+        return None
+
+
+async def _download_direct_http(stream_url: str, file_path: str, filename: str) -> Optional[str]:
+    """
+    Download video via direct HTTP request
+    """
+    try:
+        # Headers to mimic a browser
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Referer': 'https://iteraplay.com/',
@@ -193,6 +223,7 @@ async def download_video(stream_url: str, filename: str) -> Optional[str]:
             async with session.get(stream_url, timeout=aiohttp.ClientTimeout(total=600), ssl=False, allow_redirects=True) as response:
                 logger.info(f"Download Response Status: {response.status}")
                 logger.info(f"Content-Length: {response.content_length}")
+                logger.info(f"Content-Type: {response.content_type}")
                 
                 if response.status != 200:
                     logger.error(f"Stream returned status code {response.status}")
@@ -225,14 +256,72 @@ async def download_video(stream_url: str, filename: str) -> Optional[str]:
                 logger.info(f"Download complete: {filename} ({file_size} bytes / {file_size/(1024*1024):.1f}MB)")
                 return file_path
                     
+    except Exception as e:
+        logger.error(f"Error downloading video via HTTP: {e}", exc_info=True)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        return None
+
+
+async def _download_m3u8_with_ffmpeg(stream_url: str, file_path: str, filename: str) -> Optional[str]:
+    """
+    Download M3U8 HLS stream using FFmpeg
+    """
+    try:
+        import subprocess
+        
+        # FFmpeg command to download M3U8 stream
+        # -allowed_extensions ALL: Allow any extension in playlist
+        # -c copy: Copy without re-encoding (fast)
+        # -bsf:a aac_adtstoasc: Convert AAC to MP4 compatible format
+        cmd = [
+            'ffmpeg',
+            '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
+            '-allowed_extensions', 'ALL',
+            '-i', stream_url,
+            '-c', 'copy',
+            '-bsf:a', 'aac_adtstoasc',
+            '-y',  # Overwrite output file
+            '-loglevel', 'info',
+            file_path
+        ]
+        
+        logger.info(f"Running FFmpeg: {' '.join(cmd)}")
+        
+        # Run FFmpeg as subprocess
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=600)
+        
+        if process.returncode != 0:
+            logger.error(f"FFmpeg failed with return code {process.returncode}")
+            logger.error(f"Stderr: {stderr.decode('utf-8', errors='ignore')}")
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            return None
+        
+        file_size = os.path.getsize(file_path)
+        
+        if file_size < 100000:  # Less than 100KB is likely corrupted
+            logger.error(f"Downloaded file is suspiciously small: {file_size} bytes - likely corrupted")
+            os.remove(file_path)
+            return None
+        
+        logger.info(f"Download complete: {filename} ({file_size} bytes / {file_size/(1024*1024):.1f}MB)")
+        return file_path
+        
     except asyncio.TimeoutError:
-        logger.error("Download timed out")
+        logger.error("FFmpeg download timed out")
         if os.path.exists(file_path):
             os.remove(file_path)
         return None
     except Exception as e:
-        logger.error(f"Error downloading video: {e}", exc_info=True)
-        if 'file_path' in locals() and os.path.exists(file_path):
+        logger.error(f"Error downloading M3U8 stream: {e}", exc_info=True)
+        if os.path.exists(file_path):
             os.remove(file_path)
         return None
 

@@ -178,7 +178,20 @@ Use /help for more information.
                     logger.info(f"Processing link {idx}/{link_count}: {link}")
                     
                     # Process the link
-                    file_path, filename = await process_terabox_link(link)
+                    try:
+                        file_path, filename = await process_terabox_link(link)
+                    except RuntimeError as re_err:
+                        # Specific handling for anti-bot detection
+                        if 'anti-bot' in str(re_err):
+                            await processing_msg.edit_text(
+                                "⚠️ Extraction failed: the upstream API appears to be protected by anti-bot measures (reCAPTCHA/Cloudflare).\n\n"
+                                "Please try again later or provide a direct download link (mp4)."
+                            )
+                            return WAITING_FOR_LINK
+                        else:
+                            logger.error(f"Runtime error during extraction: {re_err}")
+                            failed_links.append(link)
+                            continue
                     
                     if not file_path:
                         logger.warning(f"Failed to process link: {link}")

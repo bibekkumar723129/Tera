@@ -21,21 +21,21 @@ async def extract_terabox_url(url: str) -> Optional[str]:
     - Direct Terabox links
     - Share links
     - Folder links
+    - Auto-corrects common domain typos (teraboxlink.com -> terabox.com)
     """
-    # Basic validation for Terabox URLs
-    # Accept a broader set of terabox URLs to be more forgiving with formats
     url = url.strip()
-    # Quick check that it looks like a URL and contains terabox
+    
+    # Quick check that it looks like a URL
     if not url.lower().startswith(('http://', 'https://')):
         return None
 
+    # Correct common domain typos/redirects
+    # Many shortlinks or old links use teraboxlink.com which should be terabox.com
+    url = re.sub(r'teraboxlink\.com', 'terabox.com', url, flags=re.IGNORECASE)
+    
+    # Ensure it's a terabox domain
     if 'terabox' in url.lower():
         return url
-
-    # fallback: try to extract an http(s) URL from the text
-    match = re.search(r'(https?://[^\s]+)', url)
-    if match and 'terabox' in match.group(1).lower():
-        return match.group(1)
 
     return None
 
@@ -104,22 +104,50 @@ async def fetch_stream_url(terabox_url: str) -> Optional[Tuple[str, str]]:
                         logger.info(f"Stream URL fetched successfully: {stream_url[:80]}")
                         return stream_url, filename
 
-                # If not JSON or couldn't extract, try to read text and search for an URL
+                # If not JSON or couldn't extract, try to read text and search for video URLs
                 text = await response.text()
-                # Search for first http(s) URL in the response body
-                url_match = re.search(r"(https?://[^\s\"'<>]+)", text)
-                if url_match:
-                    candidate = url_match.group(1)
-                    filename = os.path.basename(urlparse(candidate).path) or 'terabox_video.mp4'
-                    logger.info(f"Found candidate stream URL in response body: {candidate}")
-                    return candidate, filename
-
-                # Last fallback: use final response URL (after redirects)
-                final_url = str(response.url)
-                if final_url and final_url != api_url:
-                    filename = os.path.basename(urlparse(final_url).path) or 'terabox_video.mp4'
-                    logger.info(f"Using final response URL as stream: {final_url}")
-                    return final_url, filename
+                
+                # First priority: Look for videoQualities (standard TeraBox player format)
+                # Try different resolution options in order of preference
+                for resolution in ["360p", "480p", "720p", "1080p", "playUrl"]:
+                    pattern = rf'"{resolution}"\s*:\s*"([^"]+)"'
+                    match = re.search(pattern, text)
+                    if match:
+                        stream_url = match.group(1)
+                        # Unescape forward slashes
+                        stream_url = stream_url.replace('\\/', '/')
+                        filename = f'terabox_video_{resolution}.mp4'
+                        logger.info(f"Found {resolution} stream URL: {stream_url[:80]}")
+                        return stream_url, filename
+                
+                # Search for m3u8 (HLS stream) URLs - handle escaped JSON strings too
+                m3u8_patterns = [
+                    r'(https?://[^\s"\'<>]*\.m3u8[^\s"\'<>]*)',  # plain URL
+                    r'"([^"]*\.m3u8[^"]*)"',  # m3u8 inside quotes
+                ]
+                for pattern in m3u8_patterns:
+                    m3u8_match = re.search(pattern, text)
+                    if m3u8_match:
+                        stream_url = m3u8_match.group(1)
+                        # Unescape if necessary
+                        stream_url = stream_url.replace('\\/', '/').replace('\\:', ':')
+                        filename = 'terabox_video.mp4'
+                        logger.info(f"Found m3u8 stream URL: {stream_url[:80]}")
+                        return stream_url, filename
+                
+                # Search for mp4 URLs
+                mp4_patterns = [
+                    r'(https?://[^\s"\'<>]*\.mp4[^\s"\'<>]*)',  # plain URL
+                    r'"([^"]*\.mp4[^"]*)"',  # mp4 inside quotes
+                ]
+                for pattern in mp4_patterns:
+                    mp4_match = re.search(pattern, text)
+                    if mp4_match:
+                        stream_url = mp4_match.group(1)
+                        stream_url = stream_url.replace('\\/', '/').replace('\\:', ':')
+                        filename = os.path.basename(urlparse(stream_url).path) or 'terabox_video.mp4'
+                        logger.info(f"Found mp4 stream URL: {stream_url[:80]}")
+                        return stream_url, filename
 
                 logger.warning("Unable to extract stream URL from API response")
                 return None, None

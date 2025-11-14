@@ -23,18 +23,20 @@ async def extract_terabox_url(url: str) -> Optional[str]:
     - Folder links
     """
     # Basic validation for Terabox URLs
-    patterns = [
-        r'https?://(?:www\.)?terabox\.com/s/',
-        r'https?://(?:www\.)?terabox\.com/folder/',
-        r'https?://(?:www\.)?terabox\.com/web/',
-    ]
-    
+    # Accept a broader set of terabox URLs to be more forgiving with formats
     url = url.strip()
-    for pattern in patterns:
-        if re.match(pattern, url):
-            return url
-    
-    # If no pattern matches, return None
+    # Quick check that it looks like a URL and contains terabox
+    if not url.lower().startswith(('http://', 'https://')):
+        return None
+
+    if 'terabox' in url.lower():
+        return url
+
+    # fallback: try to extract an http(s) URL from the text
+    match = re.search(r'(https?://[^\s]+)', url)
+    if match and 'terabox' in match.group(1).lower():
+        return match.group(1)
+
     return None
 
 
@@ -43,34 +45,85 @@ async def fetch_stream_url(terabox_url: str) -> Optional[Tuple[str, str]]:
     Fetch streaming URL from iTeraPlay API
     Returns: (stream_url, filename) or (None, None) if failed
     """
+    api_url = config.TERABOX_API.format(url=terabox_url)
+    logger.info(f"Fetching stream URL for: {terabox_url} -> {api_url}")
+
     try:
-        api_url = config.TERABOX_API.format(url=terabox_url)
-        logger.info(f"Fetching stream URL for: {terabox_url}")
-        
         async with aiohttp.ClientSession() as session:
             async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=config.TIMEOUT)) as response:
-                if response.status == 200:
+                if response.status != 200:
+                    logger.error(f"API returned status code {response.status}")
+                    # Try to fallback to response URL if it redirected
+                    if response.url and str(response.url) != api_url:
+                        candidate = str(response.url)
+                        logger.info(f"Using redirect URL as candidate stream: {candidate}")
+                        return candidate, os.path.basename(urlparse(candidate).path) or 'terabox_video.mp4'
+                    return None, None
+
+                # Try JSON first
+                try:
                     data = await response.json()
-                    
-                    # Parse the response (adjust based on actual API response structure)
-                    if data.get("status") == "success" or "url" in data:
-                        stream_url = data.get("url") or data.get("stream_url")
-                        filename = data.get("filename") or data.get("title", "terabox_video.mp4")
-                        
-                        # Sanitize filename
-                        filename = re.sub(r'[<>:"/\\|?*]', '', filename)
+                except Exception:
+                    data = None
+
+                # If JSON present, try a few common shapes
+                if isinstance(data, dict):
+                    # common keys in different APIs
+                    stream_url = None
+                    filename = None
+
+                    # Direct url fields
+                    for key in ("url", "stream_url", "play_url", "video_url"):
+                        if key in data and data[key]:
+                            stream_url = data[key]
+                            break
+
+                    # Some APIs wrap values under 'data' or 'result'
+                    if not stream_url and isinstance(data.get('data'), dict):
+                        for key in ("url", "stream_url", "play_url", "video_url"):
+                            if key in data['data'] and data['data'][key]:
+                                stream_url = data['data'][key]
+                                break
+
+                    # filename/title
+                    for key in ("filename", "title", "name"):
+                        if key in data and data[key]:
+                            filename = data[key]
+                            break
+                    if not filename and isinstance(data.get('data'), dict):
+                        for key in ("filename", "title", "name"):
+                            if key in data['data'] and data['data'][key]:
+                                filename = data['data'][key]
+                                break
+
+                    if stream_url:
+                        filename = filename or os.path.basename(urlparse(stream_url).path) or 'terabox_video.mp4'
+                        filename = re.sub(r'[<>:\"/\\|?*]', '', filename)
                         if not filename.endswith(('.mp4', '.mkv', '.avi', '.mov')):
                             filename += '.mp4'
-                        
-                        logger.info(f"Stream URL fetched successfully: {stream_url[:50]}...")
+                        logger.info(f"Stream URL fetched successfully: {stream_url[:80]}")
                         return stream_url, filename
-                    else:
-                        logger.warning(f"API response indicates failure: {data}")
-                        return None, None
-                else:
-                    logger.error(f"API returned status code {response.status}")
-                    return None, None
-                    
+
+                # If not JSON or couldn't extract, try to read text and search for an URL
+                text = await response.text()
+                # Search for first http(s) URL in the response body
+                url_match = re.search(r"(https?://[^\s\"'<>]+)", text)
+                if url_match:
+                    candidate = url_match.group(1)
+                    filename = os.path.basename(urlparse(candidate).path) or 'terabox_video.mp4'
+                    logger.info(f"Found candidate stream URL in response body: {candidate}")
+                    return candidate, filename
+
+                # Last fallback: use final response URL (after redirects)
+                final_url = str(response.url)
+                if final_url and final_url != api_url:
+                    filename = os.path.basename(urlparse(final_url).path) or 'terabox_video.mp4'
+                    logger.info(f"Using final response URL as stream: {final_url}")
+                    return final_url, filename
+
+                logger.warning("Unable to extract stream URL from API response")
+                return None, None
+
     except asyncio.TimeoutError:
         logger.error("API request timed out")
         return None, None

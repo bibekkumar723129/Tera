@@ -51,6 +51,12 @@ async def fetch_stream_url(terabox_url: str) -> Optional[Tuple[str, str]]:
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=config.TIMEOUT)) as response:
+                logger.info(f"API Response Status: {response.status}")
+                
+                if response.status == 404:
+                    logger.error(f"API returned 404 - Link may be invalid or expired")
+                    return None, None
+                    
                 if response.status != 200:
                     logger.error(f"API returned status code {response.status}")
                     # Try to fallback to response URL if it redirected
@@ -63,7 +69,8 @@ async def fetch_stream_url(terabox_url: str) -> Optional[Tuple[str, str]]:
                 # Try JSON first
                 try:
                     data = await response.json()
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Response is not JSON: {e}")
                     data = None
 
                 # If JSON present, try a few common shapes
@@ -101,11 +108,12 @@ async def fetch_stream_url(terabox_url: str) -> Optional[Tuple[str, str]]:
                         filename = re.sub(r'[<>:\"/\\|?*]', '', filename)
                         if not filename.endswith(('.mp4', '.mkv', '.avi', '.mov')):
                             filename += '.mp4'
-                        logger.info(f"Stream URL fetched successfully: {stream_url[:80]}")
+                        logger.info(f"Stream URL fetched from JSON: {stream_url[:80]}")
                         return stream_url, filename
 
                 # If not JSON or couldn't extract, try to read text and search for video URLs
                 text = await response.text()
+                logger.debug(f"Response text length: {len(text)} bytes")
                 
                 # First priority: Look for videoQualities (standard TeraBox player format)
                 # Try different resolution options in order of preference
@@ -149,14 +157,14 @@ async def fetch_stream_url(terabox_url: str) -> Optional[Tuple[str, str]]:
                         logger.info(f"Found mp4 stream URL: {stream_url[:80]}")
                         return stream_url, filename
 
-                logger.warning("Unable to extract stream URL from API response")
+                logger.warning(f"Unable to extract stream URL from API response (response length: {len(text)})")
                 return None, None
 
     except asyncio.TimeoutError:
         logger.error("API request timed out")
         return None, None
     except Exception as e:
-        logger.error(f"Error fetching stream URL: {e}")
+        logger.error(f"Error fetching stream URL: {e}", exc_info=True)
         return None, None
 
 

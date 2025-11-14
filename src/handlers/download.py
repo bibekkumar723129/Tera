@@ -178,35 +178,61 @@ async def download_video(stream_url: str, filename: str) -> Optional[str]:
         Path(config.DOWNLOAD_DIR).mkdir(parents=True, exist_ok=True)
         file_path = os.path.join(config.DOWNLOAD_DIR, filename)
         
-        logger.info(f"Starting download: {filename}")
+        logger.info(f"Starting download: {filename} from {stream_url[:100]}")
         
-        async with aiohttp.ClientSession() as session:
-            async with session.get(stream_url, timeout=aiohttp.ClientTimeout(total=300)) as response:
-                if response.status == 200:
-                    # Check file size
-                    content_length = response.content_length
-                    if content_length and content_length > config.MAX_FILE_SIZE:
-                        logger.error(f"File too large: {content_length} bytes")
-                        return None
-                    
-                    # Download file
-                    with open(file_path, 'wb') as f:
-                        async for chunk in response.content.iter_chunked(8192):
-                            f.write(chunk)
-                    
-                    file_size = os.path.getsize(file_path)
-                    logger.info(f"Download complete: {filename} ({file_size} bytes)")
-                    return file_path
-                else:
+        # Headers to mimic a browser and improve compatibility
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Referer': 'https://iteraplay.com/',
+            'Accept': '*/*',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+        }
+        
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.get(stream_url, timeout=aiohttp.ClientTimeout(total=600), ssl=False, allow_redirects=True) as response:
+                logger.info(f"Download Response Status: {response.status}")
+                logger.info(f"Content-Length: {response.content_length}")
+                
+                if response.status != 200:
                     logger.error(f"Stream returned status code {response.status}")
                     return None
+                
+                # Check file size before downloading
+                content_length = response.content_length
+                if content_length and content_length > config.MAX_FILE_SIZE:
+                    logger.error(f"File too large: {content_length} bytes (max: {config.MAX_FILE_SIZE})")
+                    return None
+                
+                # Download file with progress tracking
+                downloaded_size = 0
+                with open(file_path, 'wb') as f:
+                    async for chunk in response.content.iter_chunked(65536):  # 64KB chunks
+                        if chunk:
+                            f.write(chunk)
+                            downloaded_size += len(chunk)
+                            if downloaded_size % (1024 * 1024) == 0:  # Log every 1MB
+                                logger.debug(f"Downloaded {downloaded_size / (1024*1024):.1f}MB")
+                
+                file_size = os.path.getsize(file_path)
+                
+                # Validate that we got a real video file
+                if file_size < 1000:  # Less than 1KB is almost certainly not a real video
+                    logger.error(f"Downloaded file is suspiciously small: {file_size} bytes - likely dummy/error response")
+                    os.remove(file_path)
+                    return None
+                
+                logger.info(f"Download complete: {filename} ({file_size} bytes / {file_size/(1024*1024):.1f}MB)")
+                return file_path
                     
     except asyncio.TimeoutError:
         logger.error("Download timed out")
+        if os.path.exists(file_path):
+            os.remove(file_path)
         return None
     except Exception as e:
-        logger.error(f"Error downloading video: {e}")
-        if os.path.exists(file_path):
+        logger.error(f"Error downloading video: {e}", exc_info=True)
+        if 'file_path' in locals() and os.path.exists(file_path):
             os.remove(file_path)
         return None
 

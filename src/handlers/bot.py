@@ -284,6 +284,181 @@ Use /help for more information.
         return WAITING_FOR_LINK
 
     
+    async def handle_link_from_caption(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[int]:
+        """Handle Terabox links from media captions (photo, document, video, etc.)"""
+        # Extract caption text from media
+        caption_text = None
+        if update.message.caption:
+            caption_text = update.message.caption.strip()
+        elif update.message.photo:
+            # Photo with caption
+            caption_text = update.message.caption
+        elif update.message.document:
+            # Document with caption
+            caption_text = update.message.caption
+        elif update.message.video:
+            # Video with caption
+            caption_text = update.message.caption
+        
+        if not caption_text:
+            logger.debug(f"Media message without caption detected from user {update.message.from_user.id}")
+            await update.message.reply_text(
+                "❌ No caption found in your media.\n\n"
+                "Please send media with a caption containing a Terabox link like:\n"
+                "https://terabox.com/s/..."
+            )
+            return WAITING_FOR_LINK
+        
+        logger.info(f"User {update.message.from_user.id} sent media with caption: {caption_text[:50]}...")
+        
+        # Process the caption text as if it were a regular message
+        # We need to manually call handle_link logic with caption text
+        user_id = update.message.from_user.id
+        logger.debug(f"Full caption text: {repr(caption_text)}")
+        
+        # Show typing indicator
+        await update.message.chat.send_action(ChatAction.TYPING)
+        
+        # Extract all Terabox links from the caption using regex
+        links = self.extract_terabox_links(caption_text)
+        logger.debug(f"Extracted {len(links)} link(s) from caption: {links}")
+        
+        if not links:
+            await update.message.reply_text(
+                "❌ No Terabox links found in the caption.\n\n"
+                "Please send media with a caption containing a valid Terabox URL like:\n"
+                "https://terabox.com/s/..."
+            )
+            return WAITING_FOR_LINK
+        
+        logger.info(f"Extracted {len(links)} link(s) from caption")
+        
+        # Process each link (same logic as handle_link)
+        for link in links:
+            try:
+                # Show processing message
+                processing_msg = await update.message.reply_text(
+                    "⏳ **Processing your link...**\n\n"
+                    f"🔗 {link[:50]}...\n\n"
+                    "Downloading and preparing video..."
+                )
+                
+                logger.info(f"Processing link from caption: {link}")
+                
+                # Process the link
+                try:
+                    file_path, filename = await process_terabox_link(link)
+                except RuntimeError as re_err:
+                    # Handle specific errors
+                    if 'anti-bot' in str(re_err):
+                        logger.warning(f"Anti-bot detected for link: {link}")
+                        await processing_msg.edit_text(
+                            "❌ **Download Failed**\n\n"
+                            "⚠️ The API is protected with reCAPTCHA.\n\n"
+                            "Please try again later."
+                        )
+                        continue
+                    else:
+                        logger.error(f"Runtime error during extraction: {re_err}")
+                        await processing_msg.edit_text(
+                            f"❌ **Download Failed**\n\n"
+                            f"Error: {str(re_err)}\n\n"
+                            "Please try again or use a different link."
+                        )
+                        continue
+                
+                if not file_path:
+                    logger.warning(f"Failed to process link: {link}")
+                    await processing_msg.edit_text(
+                        "❌ **Download Failed**\n\n"
+                        "Could not extract video from the link.\n\n"
+                        "Please check if the link is valid and try again."
+                    )
+                    continue
+                
+                # Check file size before sending
+                file_size = os.path.getsize(file_path)
+                file_size_mb = file_size / (1024 * 1024)
+                
+                if file_size_mb > 2000:  # Telegram API limit is 2000MB for bots
+                    logger.warning(f"File too large: {file_size_mb:.1f}MB")
+                    try:
+                        os.remove(file_path)
+                    except:
+                        pass
+                    await processing_msg.edit_text(
+                        f"❌ **File Too Large**\n\n"
+                        f"📊 Size: {file_size_mb:.1f}MB\n\n"
+                        f"Telegram limit: 2000MB\n"
+                        "Unfortunately, this file exceeds Telegram's limits."
+                    )
+                    continue
+                
+                # Update message to show upload stage
+                await processing_msg.edit_text(
+                    "📤 **Uploading to Telegram...**\n\n"
+                    f"📹 {filename}\n"
+                    f"📊 Size: {file_size_mb:.1f}MB\n\n"
+                    "This may take a few moments..."
+                )
+                
+                await update.message.chat.send_action(ChatAction.UPLOAD_VIDEO)
+                
+                # Send video to user
+                with open(file_path, 'rb') as video_file:
+                    await update.message.reply_video(
+                        video=video_file,
+                        caption=f"📹 {filename}\n📊 Size: {file_size_mb:.1f}MB",
+                        write_timeout=300
+                    )
+                
+                # Send to store channel if configured
+                if config.STORE_CHANNEL:
+                    try:
+                        with open(file_path, 'rb') as video_file:
+                            await self.app.bot.send_video(
+                                chat_id=config.STORE_CHANNEL,
+                                video=video_file,
+                                caption=f"📹 {filename}\nUser: {update.message.from_user.mention_html()}\nSize: {file_size_mb:.1f}MB",
+                                parse_mode='HTML',
+                                write_timeout=300
+                            )
+                        logger.info(f"Sent to store channel: {filename}")
+                    except Exception as e:
+                        logger.warning(f"Failed to send to store channel: {e}")
+                
+                # Update message to show completion
+                await processing_msg.edit_text(
+                    "✅ **Download Complete**\n\n"
+                    f"📹 {filename}\n"
+                    f"📊 Size: {file_size_mb:.1f}MB\n\n"
+                    "✔️ Video uploaded and archived in store channel!"
+                )
+                
+                # Clean up the file
+                try:
+                    os.remove(file_path)
+                    logger.info(f"Cleaned up: {file_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up {file_path}: {e}")
+                
+                # Increment download count in database
+                db.increment_download_count(user_id)
+                
+            except Exception as e:
+                logger.error(f"Error processing link {link} from caption: {e}")
+                try:
+                    await processing_msg.edit_text(
+                        f"❌ **An Error Occurred**\n\n"
+                        f"Error: {str(e)}\n\n"
+                        "Please try again."
+                    )
+                except:
+                    pass
+        
+        return WAITING_FOR_LINK
+
+    
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle errors"""
         logger.error(f"Update {update} caused error {context.error}")
@@ -300,7 +475,9 @@ Use /help for more information.
             entry_points=[CommandHandler("start", self.start_command)],
             states={
                 WAITING_FOR_LINK: [
+                    # Handle text messages and media with captions
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_link),
+                    MessageHandler(filters.CAPTION, self.handle_link_from_caption),
                 ]
             },
             fallbacks=[
@@ -312,6 +489,8 @@ Use /help for more information.
         self.app.add_handler(conv_handler)
         self.app.add_handler(CommandHandler("help", self.help_command))
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_link))
+        # Also handle captions from media (photo, document, video, etc.) outside conversation
+        self.app.add_handler(MessageHandler(filters.CAPTION, self.handle_link_from_caption))
         self.app.add_error_handler(self.error_handler)
     
     async def set_commands(self) -> None:

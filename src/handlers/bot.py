@@ -151,244 +151,128 @@ Use /help for more information.
         
         logger.info(f"Extracted {len(links)} link(s) from message")
         
-        # Build task list display
-        link_count = len(links)
-        task_list = "📋 **DOWNLOAD TASK LIST**\n"
-        task_list += "=" * 30 + "\n\n"
-        for idx, link in enumerate(links, 1):
-            short_link = link[:40] + "..." if len(link) > 40 else link
-            task_list += f"{idx}. ⏳ {short_link}\n"
-        task_list += "\n" + "=" * 30
-        
-        # Show task list
-        processing_msg = await update.message.reply_text(task_list)
-        
-        # Update to processing state
-        await processing_msg.edit_text(
-            task_list + "\n\n🔄 **Starting downloads...**"
-        )
-        
-        try:
-            # Process all extracted links
-            successful_downloads = 0
-            failed_links = []
-            link_results = {}  # Track status of each link
-            
-            for idx, link in enumerate(links, 1):
-                short_link = link[:40] + "..." if len(link) > 40 else link
+        # Process links one by one
+        for link in links:
+            try:
+                # Show processing message
+                processing_msg = await update.message.reply_text(
+                    "⏳ **Processing your link...**\n\n"
+                    f"🔗 {link[:50]}...\n\n"
+                    "Downloading and preparing video..."
+                )
                 
+                logger.info(f"Processing link: {link}")
+                
+                # Process the link
                 try:
-                    # Build live task list with current progress
-                    live_list = "📋 **DOWNLOAD TASK LIST**\n"
-                    live_list += "=" * 30 + "\n\n"
-                    for i, l in enumerate(links, 1):
-                        short_l = l[:40] + "..." if len(l) > 40 else l
-                        if i < idx:
-                            live_list += f"{i}. ✅ {short_l}\n"
-                        elif i == idx:
-                            live_list += f"{i}. 🔄 {short_l}\n"
-                        else:
-                            live_list += f"{i}. ⏳ {short_l}\n"
-                    live_list += "\n" + "=" * 30
-                    
-                    # Show extraction stage with progress bar
-                    progress_bar = "▓░░░░░░░░░░░░░░░░░░"
-                    live_list += f"\n\n**[{idx}/{link_count}] EXTRACTING STREAM...**\n"
-                    live_list += progress_bar + " 5%"
-                    
-                    await processing_msg.edit_text(live_list)
-                    logger.info(f"Processing link {idx}/{link_count}: {link}")
-                    
-                    # Process the link
-                    try:
-                        file_path, filename = await process_terabox_link(link)
-                    except RuntimeError as re_err:
-                        # Specific handling for anti-bot detection
-                        if 'anti-bot' in str(re_err):
-                            logger.warning(f"Anti-bot detected for link {idx}/{link_count}")
-                            failed_links.append(link)
-                            # Update task list with failure
-                            live_list = "📋 **DOWNLOAD TASK LIST**\n"
-                            live_list += "=" * 30 + "\n\n"
-                            for i, l in enumerate(links, 1):
-                                short_l = l[:40] + "..." if len(l) > 40 else l
-                                if i < idx:
-                                    live_list += f"{i}. ✅ {short_l}\n"
-                                elif i == idx:
-                                    live_list += f"{i}. 🚫 {short_l}\n"
-                                else:
-                                    live_list += f"{i}. ⏳ {short_l}\n"
-                            live_list += "\n" + "=" * 30
-                            live_list += f"\n\n⚠️ API protected (reCAPTCHA)\nTrying remaining links..."
-                            await processing_msg.edit_text(live_list)
-                            await asyncio.sleep(1)
-                            continue
-                        else:
-                            logger.error(f"Runtime error during extraction: {re_err}")
-                            failed_links.append(link)
-                            # Update task list with failure
-                            live_list = "📋 **DOWNLOAD TASK LIST**\n"
-                            live_list += "=" * 30 + "\n\n"
-                            for i, l in enumerate(links, 1):
-                                short_l = l[:40] + "..." if len(l) > 40 else l
-                                if i < idx:
-                                    live_list += f"{i}. ✅ {short_l}\n"
-                                elif i == idx:
-                                    live_list += f"{i}. ❌ {short_l}\n"
-                                else:
-                                    live_list += f"{i}. ⏳ {short_l}\n"
-                            live_list += "\n" + "=" * 30
-                            live_list += f"\n\n❌ Error during extraction\nContinuing with other links..."
-                            await processing_msg.edit_text(live_list)
-                            await asyncio.sleep(1)
-                            continue
-                    
-                    if not file_path:
-                        logger.warning(f"Failed to process link: {link}")
-                        failed_links.append(link)
-                        continue
-                    
-                    # Check file size before sending
-                    file_size = os.path.getsize(file_path)
-                    file_size_mb = file_size / (1024 * 1024)
-                    
-                    if file_size_mb > 2000:  # Telegram API limit is 2000MB for bots
-                        logger.warning(f"File too large for {link}: {file_size_mb:.1f}MB")
-                        failed_links.append(link)
-                        try:
-                            os.remove(file_path)
-                        except:
-                            pass
-                        # Update list with file size error
-                        live_list = "📋 **DOWNLOAD TASK LIST**\n"
-                        live_list += "=" * 30 + "\n\n"
-                        for i, l in enumerate(links, 1):
-                            short_l = l[:40] + "..." if len(l) > 40 else l
-                            if i < idx:
-                                live_list += f"{i}. ✅ {short_l}\n"
-                            elif i == idx:
-                                live_list += f"{i}. ❌ {short_l}\n"
-                            else:
-                                live_list += f"{i}. ⏳ {short_l}\n"
-                        live_list += "\n" + "=" * 30
-                        live_list += f"\n\n❌ Error: File too large ({file_size_mb:.1f}MB)\nContinuing with other links..."
-                        await processing_msg.edit_text(live_list)
-                        await asyncio.sleep(1)
-                        continue
-                    
-                    # Show download complete - uploading stage
-                    progress_stages = [
-                        ("▓▓▓▓▓░░░░░░░░░░░░░░", "25%"),
-                        ("▓▓▓▓▓▓▓▓░░░░░░░░░░", "40%"),
-                        ("▓▓▓▓▓▓▓▓▓▓▓░░░░░░░", "55%"),
-                        ("▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░", "70%"),
-                        ("▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░", "85%"),
-                    ]
-                    
-                    for prog_bar, pct in progress_stages:
-                        live_list = "📋 **DOWNLOAD TASK LIST**\n"
-                        live_list += "=" * 30 + "\n\n"
-                        for i, l in enumerate(links, 1):
-                            short_l = l[:40] + "..." if len(l) > 40 else l
-                            if i < idx:
-                                live_list += f"{i}. ✅ {short_l}\n"
-                            elif i == idx:
-                                live_list += f"{i}. 🔄 {short_l}\n"
-                            else:
-                                live_list += f"{i}. ⏳ {short_l}\n"
-                        live_list += "\n" + "=" * 30
-                        live_list += f"\n\n**[{idx}/{link_count}] UPLOADING TO TELEGRAM**\n"
-                        live_list += f"{prog_bar} {pct}\n"
-                        live_list += f"📹 {filename} ({file_size_mb:.1f}MB)"
-                        
-                        await processing_msg.edit_text(live_list)
-                        await asyncio.sleep(0.5)
-                    
-                    await update.message.chat.send_action(ChatAction.UPLOAD_VIDEO)
-                    
-                    # Send video to user
-                    with open(file_path, 'rb') as video_file:
-                        sent_message = await update.message.reply_video(
-                            video=video_file,
-                            caption=f"📹 {filename}\n📊 Size: {file_size_mb:.1f}MB",
-                            write_timeout=300
+                    file_path, filename = await process_terabox_link(link)
+                except RuntimeError as re_err:
+                    # Handle specific errors
+                    if 'anti-bot' in str(re_err):
+                        logger.warning(f"Anti-bot detected for link: {link}")
+                        await processing_msg.edit_text(
+                            "❌ **Download Failed**\n\n"
+                            "⚠️ The API is protected with reCAPTCHA.\n\n"
+                            "Please try again later."
                         )
-                    
-                    # Forward to store channel if configured
-                    if config.STORE_CHANNEL:
-                        try:
-                            with open(file_path, 'rb') as video_file:
-                                await self.app.bot.send_video(
-                                    chat_id=config.STORE_CHANNEL,
-                                    video=video_file,
-                                    caption=f"📹 {filename}\nUser: {update.message.from_user.mention_html()}\nSize: {file_size_mb:.1f}MB",
-                                    parse_mode='HTML',
-                                    write_timeout=300
-                                )
-                            logger.info(f"Forwarded to store channel: {filename}")
-                        except Exception as e:
-                            logger.warning(f"Failed to forward to store channel: {e}")
-                    
-                    # Clean up the file
+                        continue
+                    else:
+                        logger.error(f"Runtime error during extraction: {re_err}")
+                        await processing_msg.edit_text(
+                            f"❌ **Download Failed**\n\n"
+                            f"Error: {str(re_err)}\n\n"
+                            "Please try again or use a different link."
+                        )
+                        continue
+                
+                if not file_path:
+                    logger.warning(f"Failed to process link: {link}")
+                    await processing_msg.edit_text(
+                        "❌ **Download Failed**\n\n"
+                        "Could not extract video from the link.\n\n"
+                        "Please check if the link is valid and try again."
+                    )
+                    continue
+                
+                # Check file size before sending
+                file_size = os.path.getsize(file_path)
+                file_size_mb = file_size / (1024 * 1024)
+                
+                if file_size_mb > 2000:  # Telegram API limit is 2000MB for bots
+                    logger.warning(f"File too large: {file_size_mb:.1f}MB")
                     try:
                         os.remove(file_path)
-                        logger.info(f"Cleaned up: {file_path}")
-                    except Exception as e:
-                        logger.warning(f"Failed to clean up {file_path}: {e}")
-                    
-                    # Increment download count in database
-                    db.increment_download_count(user_id)
-                    successful_downloads += 1
-                    
-                    # Update task list with completion
-                    live_list = "📋 **DOWNLOAD TASK LIST**\n"
-                    live_list += "=" * 30 + "\n\n"
-                    for i, l in enumerate(links, 1):
-                        short_l = l[:40] + "..." if len(l) > 40 else l
-                        if i <= idx:
-                            live_list += f"{i}. ✅ {short_l}\n"
-                        else:
-                            live_list += f"{i}. ⏳ {short_l}\n"
-                    live_list += "\n" + "=" * 30
-                    live_list += f"\n\n✅ Downloaded {idx}/{link_count} videos"
-                    await processing_msg.edit_text(live_list)
-                    await asyncio.sleep(0.5)
-                    
-                except Exception as e:
-                    logger.error(f"Error processing link {link}: {e}")
-                    failed_links.append(link)
-            
-            # Final status message with summary
-            final_msg = "📋 **DOWNLOAD TASK LIST**\n"
-            final_msg += "=" * 30 + "\n\n"
-            for i, l in enumerate(links, 1):
-                short_l = l[:40] + "..." if len(l) > 40 else l
-                if l not in failed_links:
-                    final_msg += f"{i}. ✅ {short_l}\n"
-                else:
-                    final_msg += f"{i}. ❌ {short_l}\n"
-            final_msg += "\n" + "=" * 30
-            final_msg += f"\n\n**SUMMARY:**\n"
-            final_msg += f"✅ Successful: {successful_downloads}\n"
-            final_msg += f"❌ Failed: {len(failed_links)}\n"
-            
-            if successful_downloads == 0 and len(failed_links) > 0:
-                final_msg += "\n⚠️ No videos could be downloaded.\n"
-                final_msg += "Possible reasons:\n"
-                final_msg += "• Invalid or expired links\n"
-                final_msg += "• Videos no longer available\n"
-                final_msg += "• API protection detected\n"
-                final_msg += "• Network timeout\n\n"
-                final_msg += "Please try again or use different links."
-            
-            await processing_msg.edit_text(final_msg)
+                    except:
+                        pass
+                    await processing_msg.edit_text(
+                        f"❌ **File Too Large**\n\n"
+                        f"📊 Size: {file_size_mb:.1f}MB\n\n"
+                        f"Telegram limit: 2000MB\n"
+                        "Unfortunately, this file exceeds Telegram's limits."
+                    )
+                    continue
                 
-        except Exception as e:
-            logger.error(f"Error processing link: {e}")
-            await processing_msg.edit_text(
-                f"❌ An error occurred: {str(e)}\n\n"
-                f"Please try again or contact support."
-            )
+                # Update message to show upload stage
+                await processing_msg.edit_text(
+                    "📤 **Uploading to Telegram...**\n\n"
+                    f"📹 {filename}\n"
+                    f"📊 Size: {file_size_mb:.1f}MB\n\n"
+                    "This may take a few moments..."
+                )
+                
+                await update.message.chat.send_action(ChatAction.UPLOAD_VIDEO)
+                
+                # Send video to user
+                with open(file_path, 'rb') as video_file:
+                    await update.message.reply_video(
+                        video=video_file,
+                        caption=f"📹 {filename}\n📊 Size: {file_size_mb:.1f}MB",
+                        write_timeout=300
+                    )
+                
+                # Send to store channel if configured
+                if config.STORE_CHANNEL:
+                    try:
+                        with open(file_path, 'rb') as video_file:
+                            await self.app.bot.send_video(
+                                chat_id=config.STORE_CHANNEL,
+                                video=video_file,
+                                caption=f"📹 {filename}\nUser: {update.message.from_user.mention_html()}\nSize: {file_size_mb:.1f}MB",
+                                parse_mode='HTML',
+                                write_timeout=300
+                            )
+                        logger.info(f"Sent to store channel: {filename}")
+                    except Exception as e:
+                        logger.warning(f"Failed to send to store channel: {e}")
+                
+                # Update message to show completion
+                await processing_msg.edit_text(
+                    "✅ **Download Complete**\n\n"
+                    f"📹 {filename}\n"
+                    f"📊 Size: {file_size_mb:.1f}MB\n\n"
+                    "✔️ Video uploaded and archived in store channel!"
+                )
+                
+                # Clean up the file
+                try:
+                    os.remove(file_path)
+                    logger.info(f"Cleaned up: {file_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up {file_path}: {e}")
+                
+                # Increment download count in database
+                db.increment_download_count(user_id)
+                
+            except Exception as e:
+                logger.error(f"Error processing link {link}: {e}")
+                try:
+                    await processing_msg.edit_text(
+                        f"❌ **An Error Occurred**\n\n"
+                        f"Error: {str(e)}\n\n"
+                        "Please try again."
+                    )
+                except:
+                    pass
         
         return WAITING_FOR_LINK
 

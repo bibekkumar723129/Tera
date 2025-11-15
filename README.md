@@ -1,15 +1,61 @@
 # Tera
 
-Terabox video downloader Telegram bot with MongoDB user tracking, restart notifications, and download statistics.
+Terabox video downloader Telegram bot with MongoDB user tracking, professional UI, premium tier system, and auto-upload feature.
 
-## Features
+## ✨ Features
 
+✅ **Professional User Interface** - Interactive inline keyboard menus  
 ✅ **Download Terabox Videos** - Download videos directly from Terabox links  
-✅ **MongoDB Integration** - Track users, downloads, and activity  
-✅ **Starter Messages** - Welcome new users with personalized greeting  
-✅ **Restart Notifications** - Notify all users when bot restarts  
-✅ **Download Tracking** - Keep statistics on user downloads  
-✅ **Admin Notifications** - Send restart stats to admin user  
+✅ **User Statistics** - `/stats` command shows download history and premium status  
+✅ **Premium Tier System** - QR code payment system with 3 pricing tiers  
+✅ **Payment Verification** - Screenshot-based payment verification  
+✅ **Admin Control Panel** - `/addpremium`, `/removepremium`, `/premiuminfo`, `/listpremium`  
+✅ **Queue System** - Priority-based download queue with premium acceleration  
+✅ **Daily Quotas** - Free (5/day), Premium (100/day) download limits  
+✅ **Quality Selection** - Choose video quality: 1080p, 720p, 480p, 360p, auto  
+✅ **Auto-Rename** - Custom filename patterns with date/time/counter placeholders  
+✅ **Download History** - Permanent history tracking for premium users  
+✅ **TOP USERS Leaderboard** - View top premium users with medals  
+✅ **Auto-Upload Feature** - Premium users auto-upload downloads to their channel  
+✅ **MongoDB Integration** - Track users, downloads, and premium data  
+✅ **Store Channel** - Archive all downloads in a store channel  
+
+## 🎨 Professional UI
+
+The bot features an elegant interface with:
+- **Main Menu** - Buttons: 📊 Stats, ❓ Help, 🎬 Quality, ✏️ Rename, ⭐ Premium
+- **Premium Menu** - Payment button, activation, auto-upload setup
+- **Payment Interface** - QR code display with pricing tiers
+- **Stats Display** - Premium badges, download counts, leaderboard
+- **Navigation** - Intuitive back buttons throughout
+- **Dynamic Options** - Premium users unlock exclusive features
+
+## 💎 Premium System
+
+### New Payment System
+- **💸 Get Premium Button** - Shows QR code with 3 pricing tiers
+- **Premium Tiers**:
+  - 🥉 **Basic** ($4.99/month): 100 downloads/day, priority processing
+  - 🥈 **Pro** ($9.99/month): 500 downloads/day + bulk support
+  - 🥇 **VIP** ($19.99/month): Unlimited downloads + direct support
+- **Payment Verification**: Screenshot-based verification system
+- **Admin Approval**: Admins verify and activate premium instantly
+
+### Premium Features
+- 🔄 **Auto-Upload** - Automatically forward downloads to your channel
+- ⚡ **Priority Processing** - 1.0x speed vs free users' 3.0x delay
+- 📊 **Higher Limits** - 100+ downloads per day vs free users' 5
+- 🎬 **Quality Selection** - All quality options available
+- ✏️ **File Renaming** - Custom patterns with placeholders
+- 🏆 **Leaderboard** - Appear in TOP USERS ranking
+- 📈 **Permanent History** - All downloads stored permanently
+- 👑 **Premium Badge** - Display ⭐ badge in stats
+
+### Admin Control
+- `/addpremium <user_id> <days>` - Grant premium status
+- `/removepremium <user_id>` - Revoke premium access
+- `/premiuminfo <user_id>` - View user premium details
+- `/listpremium` - Show top 20 premium users
 
 ## Prerequisites
 
@@ -152,17 +198,71 @@ Tera/
 
 ## Commands
 
-- `/start` - Start bot and register user
-- `/help` - Show help and command list
+- `/start` - Start bot and show main menu
+- `/help` - Show help menu with back button
+- `/stats` - Show your download statistics and premium status
 - `/cancel` - Cancel current download operation
+
+## Inline Buttons
+
+**Main Menu:**
+- 📊 Stats - View download statistics
+- ❓ Help - Show help information
+- ⭐ Premium - Access premium features
+
+**Premium Menu:**
+- ✅ Activate Premium - Get 30-day free trial
+- 🔄 Auto-Upload Setup - Configure channel
+- ⬅️ Back - Return to main menu
 
 ## How It Works
 
-1. User sends `/start` → Added to MongoDB database
-2. User sends Terabox link → Bot downloads video via iTeraPlay API
-3. Bot uploads video to Telegram (if under 2GB limit)
-4. Download count incremented in database
-5. Bot restarts → Notification sent to all users + admin with stats
+1. User sends `/start` → Main menu displayed with interactive buttons
+2. User clicks buttons → Navigate menus smoothly
+3. User sends Terabox link → Bot downloads and sends video
+4. For premium users → Auto-uploads to configured channel
+5. Stats tracked in MongoDB for later review
+
+## Premium Setup
+
+### For Users
+1. Open bot and click `/start`
+2. Click ⭐ **Premium** button
+3. Click ✅ **Activate Premium** for 30-day trial
+4. Click 🔄 **Auto-Upload Setup**
+5. Send your channel ID
+6. Done! Videos now auto-upload
+
+### Channel ID Format
+- Find your channel in Telegram
+- Get the ID (usually starts with -100)
+- Paste to bot when asked
+
+## Database Schema
+
+User document includes:
+```javascript
+{
+  user_id: 12345,
+  first_name: "John",
+  downloads_count: 42,
+  join_date: "2025-01-15",
+  
+  // Premium Fields
+  is_premium: true,
+  premium_until: "2025-02-24",
+  auto_upload_channel: "-100123456",
+  auto_upload_enabled: true
+}
+```
+
+## Documentation
+
+- **UI_FEATURES.md** - Technical feature breakdown
+- **PROFESSIONAL_UI_GUIDE.md** - User-friendly guide
+- **IMPLEMENTATION_SUMMARY.md** - Code statistics
+- **QUICK_REFERENCE.md** - Visual flowcharts
+- **IMPLEMENTATION_STATUS.md** - Project status
 
 ## Troubleshooting
 

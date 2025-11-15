@@ -2,7 +2,9 @@
 MongoDB database module for user management
 """
 import logging
+import os
 from datetime import datetime
+from typing import Optional
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
 
@@ -58,6 +60,10 @@ class Database:
                 'joined_at': datetime.utcnow(),
                 'last_active': datetime.utcnow(),
                 'downloads_count': 0,
+                'is_premium': False,
+                'premium_until': None,
+                'auto_upload_channel': None,  # For premium users to save their channel
+                'auto_upload_enabled': False,  # Premium feature flag
             }
             self.users_collection.insert_one(user_data)
             logger.info(f"Added new user: {user_id}")
@@ -136,6 +142,287 @@ class Database:
         except Exception as e:
             logger.error(f"Error counting users: {e}")
             return 0
+    
+    def set_premium(self, user_id: int, is_premium: bool, premium_until=None) -> bool:
+        """Set user as premium"""
+        try:
+            self.users_collection.update_one(
+                {'user_id': user_id},
+                {'$set': {'is_premium': is_premium, 'premium_until': premium_until}},
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error setting premium status for {user_id}: {e}")
+            return False
+    
+    def is_premium(self, user_id: int) -> bool:
+        """Check if user is premium"""
+        try:
+            user = self.users_collection.find_one({'user_id': user_id})
+            if user:
+                return user.get('is_premium', False)
+            return False
+        except Exception as e:
+            logger.error(f"Error checking premium status for {user_id}: {e}")
+            return False
+    
+    def set_auto_upload_channel(self, user_id: int, channel_id: str, enabled: bool = True) -> bool:
+        """Set auto-upload channel for premium user"""
+        try:
+            self.users_collection.update_one(
+                {'user_id': user_id},
+                {'$set': {'auto_upload_channel': channel_id, 'auto_upload_enabled': enabled}},
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error setting auto-upload channel for {user_id}: {e}")
+            return False
+    
+    def get_auto_upload_channel(self, user_id: int) -> Optional[str]:
+        """Get auto-upload channel for user"""
+        try:
+            user = self.users_collection.find_one({'user_id': user_id})
+            if user and user.get('auto_upload_enabled'):
+                return user.get('auto_upload_channel')
+            return None
+        except Exception as e:
+            logger.error(f"Error getting auto-upload channel for {user_id}: {e}")
+            return None
+    
+    def get_user(self, user_id: int) -> dict:
+        """Get complete user data"""
+        try:
+            user = self.users_collection.find_one({'user_id': user_id})
+            return user if user else {}
+        except Exception as e:
+            logger.error(f"Error fetching user data for {user_id}: {e}")
+            return {}
+
+    def get_daily_download_count(self, user_id: int) -> int:
+        """Get today's download count"""
+        try:
+            user = self.users_collection.find_one({'user_id': user_id})
+            if user:
+                last_reset = user.get('last_download_reset', datetime.utcnow())
+                # Check if we need to reset daily counter
+                if (datetime.utcnow() - last_reset).days >= 1:
+                    self.reset_daily_quota(user_id)
+                    return 0
+                return user.get('downloads_today', 0)
+            return 0
+        except Exception as e:
+            logger.error(f"Error getting daily download count: {e}")
+            return 0
+
+    def increment_daily_downloads(self, user_id: int) -> None:
+        """Increment today's download count"""
+        try:
+            self.users_collection.update_one(
+                {'user_id': user_id},
+                {'$inc': {'downloads_today': 1}}
+            )
+        except Exception as e:
+            logger.error(f"Error incrementing daily downloads: {e}")
+
+    def reset_daily_quota(self, user_id: int) -> None:
+        """Reset daily download quota"""
+        try:
+            self.users_collection.update_one(
+                {'user_id': user_id},
+                {
+                    '$set': {
+                        'downloads_today': 0,
+                        'last_download_reset': datetime.utcnow()
+                    }
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error resetting daily quota: {e}")
+
+    def check_quota_exceeded(self, user_id: int) -> bool:
+        """Check if user exceeded daily quota"""
+        try:
+            user = self.users_collection.find_one({'user_id': user_id})
+            if not user:
+                self.add_user(user_id)
+                user = self.users_collection.find_one({'user_id': user_id})
+            
+            daily_limit = int(os.getenv('PREMIUM_DAILY_DOWNLOADS', 100)) \
+                if user.get('is_premium') \
+                else int(os.getenv('FREE_DAILY_DOWNLOADS', 5))
+            
+            current_count = self.get_daily_download_count(user_id)
+            return current_count >= daily_limit
+        except Exception as e:
+            logger.error(f"Error checking quota: {e}")
+            return True
+
+    def add_to_history(self, user_id: int, file_name: str, 
+                       file_size: int, download_url: str) -> None:
+        """Add file to user's download history"""
+        try:
+            history_entry = {
+                'timestamp': datetime.utcnow(),
+                'file_name': file_name,
+                'file_size_mb': file_size / 1024 / 1024,
+                'url': download_url[:100],
+            }
+            self.users_collection.update_one(
+                {'user_id': user_id},
+                {
+                    '$push': {
+                        'download_history': {
+                            '$each': [history_entry],
+                            '$slice': -50
+                        }
+                    }
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error adding to history: {e}")
+
+    def get_download_history(self, user_id: int, limit: int = 10) -> list:
+        """Get user's download history"""
+        try:
+            user = self.users_collection.find_one({'user_id': user_id})
+            if user:
+                history = user.get('download_history', [])
+                return history[-limit:] if limit else history
+            return []
+        except Exception as e:
+            logger.error(f"Error getting download history: {e}")
+            return []
+
+    def set_quality_preference(self, user_id: int, quality: str) -> bool:
+        """Set user's preferred video quality"""
+        try:
+            valid_qualities = ['auto', '1080p', '720p', '480p', '360p']
+            if quality not in valid_qualities:
+                return False
+            
+            self.users_collection.update_one(
+                {'user_id': user_id},
+                {'$set': {'preferred_quality': quality}}
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error setting quality preference: {e}")
+            return False
+
+    def get_quality_preference(self, user_id: int) -> str:
+        """Get user's preferred video quality"""
+        try:
+            user = self.users_collection.find_one({'user_id': user_id})
+            if user:
+                return user.get('preferred_quality', 'auto')
+            return 'auto'
+        except Exception as e:
+            logger.error(f"Error getting quality preference: {e}")
+            return 'auto'
+
+    def set_auto_rename_pattern(self, user_id: int, pattern: str) -> bool:
+        """Set user's auto-rename pattern"""
+        try:
+            self.users_collection.update_one(
+                {'user_id': user_id},
+                {'$set': {'auto_rename_pattern': pattern}}
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error setting rename pattern: {e}")
+            return False
+
+    def get_auto_rename_pattern(self, user_id: int) -> str:
+        """Get user's auto-rename pattern"""
+        try:
+            user = self.users_collection.find_one({'user_id': user_id})
+            if user:
+                return user.get('auto_rename_pattern')
+            return None
+        except Exception as e:
+            logger.error(f"Error getting rename pattern: {e}")
+            return None
+
+    def set_investment_amount(self, user_id: int, amount: float) -> None:
+        """Update user's investment/spending amount"""
+        try:
+            self.users_collection.update_one(
+                {'user_id': user_id},
+                {'$set': {'total_investment': amount}}
+            )
+        except Exception as e:
+            logger.error(f"Error setting investment amount: {e}")
+
+    def get_premium_users_sorted(self, limit: int = 10, 
+                                 sort_by: str = 'premium_days_purchased') -> list:
+        """Get premium users sorted by criteria"""
+        try:
+            sort_field = 'total_investment' if sort_by == 'investment' else 'premium_days_purchased'
+            users = list(self.users_collection.find(
+                {'is_premium': True},
+                {'user_id': 1, 'first_name': 1, 'premium_days_purchased': 1, 
+                 'total_investment': 1, 'premium_until': 1}
+            ).sort(sort_field, -1).limit(limit))
+            return users
+        except Exception as e:
+            logger.error(f"Error getting premium users: {e}")
+            return []
+
+    def check_and_update_premium_status(self, user_id: int) -> bool:
+        """Check if premium has expired and auto-downgrade if needed. Returns current premium status."""
+        try:
+            user = self.users_collection.find_one({'user_id': user_id})
+            if not user:
+                return False
+            
+            is_premium = user.get('is_premium', False)
+            premium_until = user.get('premium_until')
+            
+            # If user is premium, check if expired
+            if is_premium and premium_until:
+                if datetime.utcnow() > premium_until:
+                    # Premium expired, downgrade to free
+                    self.users_collection.update_one(
+                        {'user_id': user_id},
+                        {'$set': {'is_premium': False, 'premium_until': None}}
+                    )
+                    logger.info(f"Auto-downgraded user {user_id} from premium (expired)")
+                    return False
+                else:
+                    return True
+            
+            return is_premium
+        except Exception as e:
+            logger.error(f"Error checking premium status: {e}")
+            return False
+
+    def get_time_until_premium_expiry(self, user_id: int) -> dict:
+        """Get time remaining until premium expires"""
+        try:
+            user = self.users_collection.find_one({'user_id': user_id})
+            if not user:
+                return {'expires_in_days': 0, 'expires_at': None, 'is_premium': False}
+            
+            is_premium = user.get('is_premium', False)
+            premium_until = user.get('premium_until')
+            
+            if not is_premium or not premium_until:
+                return {'expires_in_days': 0, 'expires_at': None, 'is_premium': False}
+            
+            time_remaining = premium_until - datetime.utcnow()
+            days_remaining = time_remaining.days
+            
+            return {
+                'is_premium': True,
+                'expires_at': premium_until,
+                'expires_in_days': max(0, days_remaining),
+                'expires_soon': days_remaining <= 3  # Alert if 3 days or less
+            }
+        except Exception as e:
+            logger.error(f"Error getting expiry time: {e}")
+            return {'expires_in_days': 0, 'expires_at': None, 'is_premium': False}
 
 
 # Global database instance

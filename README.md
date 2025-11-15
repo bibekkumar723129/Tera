@@ -7,28 +7,55 @@ Terabox video downloader Telegram bot with MongoDB user tracking, professional U
 ✅ **Professional User Interface** - Interactive inline keyboard menus  
 ✅ **Download Terabox Videos** - Download videos directly from Terabox links  
 ✅ **User Statistics** - `/stats` command shows download history and premium status  
-✅ **Premium Tier System** - 30-day free trial with premium features  
+✅ **Premium Tier System** - QR code payment system with 3 pricing tiers  
+✅ **Payment Verification** - Screenshot-based payment verification  
+✅ **Admin Control Panel** - `/addpremium`, `/removepremium`, `/premiuminfo`, `/listpremium`  
+✅ **Queue System** - Priority-based download queue with premium acceleration  
+✅ **Daily Quotas** - Free (5/day), Premium (100/day) download limits  
+✅ **Quality Selection** - Choose video quality: 1080p, 720p, 480p, 360p, auto  
+✅ **Auto-Rename** - Custom filename patterns with date/time/counter placeholders  
+✅ **Download History** - Permanent history tracking for premium users  
+✅ **TOP USERS Leaderboard** - View top premium users with medals  
 ✅ **Auto-Upload Feature** - Premium users auto-upload downloads to their channel  
 ✅ **MongoDB Integration** - Track users, downloads, and premium data  
 ✅ **Store Channel** - Archive all downloads in a store channel  
-✅ **Media Caption Support** - Extract links from photo/document/video captions  
-✅ **Download Tracking** - Keep statistics on user downloads and activity  
 
 ## 🎨 Professional UI
 
-The bot now features:
-- **Main Menu** - Interactive buttons: 📊 Stats, ❓ Help, ⭐ Premium
-- **Premium Menu** - Activate trial, setup auto-upload
-- **Stats Display** - View downloads, join date, membership duration
-- **Back Buttons** - Easy navigation throughout menus
-- **Dynamic Display** - Premium users see extra options
+The bot features an elegant interface with:
+- **Main Menu** - Buttons: 📊 Stats, ❓ Help, 🎬 Quality, ✏️ Rename, ⭐ Premium
+- **Premium Menu** - Payment button, activation, auto-upload setup
+- **Payment Interface** - QR code display with pricing tiers
+- **Stats Display** - Premium badges, download counts, leaderboard
+- **Navigation** - Intuitive back buttons throughout
+- **Dynamic Options** - Premium users unlock exclusive features
 
-## Premium Features
+## 💎 Premium System
 
-- 🔄 **Auto-Upload** - Automatically forward downloads to your Telegram channel
-- ⭐ **Premium Status** - 30-day free trial included
-- 📊 **Priority Support** - Get help faster
-- ⚡ **Enhanced Experience** - All download features available  
+### New Payment System
+- **💸 Get Premium Button** - Shows QR code with 3 pricing tiers
+- **Premium Tiers**:
+  - 🥉 **Basic** ($4.99/month): 100 downloads/day, priority processing
+  - 🥈 **Pro** ($9.99/month): 500 downloads/day + bulk support
+  - 🥇 **VIP** ($19.99/month): Unlimited downloads + direct support
+- **Payment Verification**: Screenshot-based verification system
+- **Admin Approval**: Admins verify and activate premium instantly
+
+### Premium Features
+- 🔄 **Auto-Upload** - Automatically forward downloads to your channel
+- ⚡ **Priority Processing** - 1.0x speed vs free users' 3.0x delay
+- 📊 **Higher Limits** - 100+ downloads per day vs free users' 5
+- 🎬 **Quality Selection** - All quality options available
+- ✏️ **File Renaming** - Custom patterns with placeholders
+- 🏆 **Leaderboard** - Appear in TOP USERS ranking
+- 📈 **Permanent History** - All downloads stored permanently
+- 👑 **Premium Badge** - Display ⭐ badge in stats
+
+### Admin Control
+- `/addpremium <user_id> <days>` - Grant premium status
+- `/removepremium <user_id>` - Revoke premium access
+- `/premiuminfo <user_id>` - View user premium details
+- `/listpremium` - Show top 20 premium users
 
 ## Prerequisites
 

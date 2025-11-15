@@ -3,6 +3,7 @@ MongoDB database module for user management
 """
 import logging
 from datetime import datetime
+from typing import Optional
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
 
@@ -58,6 +59,10 @@ class Database:
                 'joined_at': datetime.utcnow(),
                 'last_active': datetime.utcnow(),
                 'downloads_count': 0,
+                'is_premium': False,
+                'premium_until': None,
+                'auto_upload_channel': None,  # For premium users to save their channel
+                'auto_upload_enabled': False,  # Premium feature flag
             }
             self.users_collection.insert_one(user_data)
             logger.info(f"Added new user: {user_id}")
@@ -136,6 +141,63 @@ class Database:
         except Exception as e:
             logger.error(f"Error counting users: {e}")
             return 0
+    
+    def set_premium(self, user_id: int, is_premium: bool, premium_until=None) -> bool:
+        """Set user as premium"""
+        try:
+            self.users_collection.update_one(
+                {'user_id': user_id},
+                {'$set': {'is_premium': is_premium, 'premium_until': premium_until}},
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error setting premium status for {user_id}: {e}")
+            return False
+    
+    def is_premium(self, user_id: int) -> bool:
+        """Check if user is premium"""
+        try:
+            user = self.users_collection.find_one({'user_id': user_id})
+            if user:
+                return user.get('is_premium', False)
+            return False
+        except Exception as e:
+            logger.error(f"Error checking premium status for {user_id}: {e}")
+            return False
+    
+    def set_auto_upload_channel(self, user_id: int, channel_id: str, enabled: bool = True) -> bool:
+        """Set auto-upload channel for premium user"""
+        try:
+            self.users_collection.update_one(
+                {'user_id': user_id},
+                {'$set': {'auto_upload_channel': channel_id, 'auto_upload_enabled': enabled}},
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error setting auto-upload channel for {user_id}: {e}")
+            return False
+    
+    def get_auto_upload_channel(self, user_id: int) -> Optional[str]:
+        """Get auto-upload channel for user"""
+        try:
+            user = self.users_collection.find_one({'user_id': user_id})
+            if user and user.get('auto_upload_enabled'):
+                return user.get('auto_upload_channel')
+            return None
+        except Exception as e:
+            logger.error(f"Error getting auto-upload channel for {user_id}: {e}")
+            return None
+    
+    def get_user(self, user_id: int) -> dict:
+        """Get complete user data"""
+        try:
+            user = self.users_collection.find_one({'user_id': user_id})
+            return user if user else {}
+        except Exception as e:
+            logger.error(f"Error fetching user data for {user_id}: {e}")
+            return {}
 
 
 # Global database instance

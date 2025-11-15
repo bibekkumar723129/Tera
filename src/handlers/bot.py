@@ -6,7 +6,7 @@ import os
 import re
 import asyncio
 from pathlib import Path
-from telegram import Update, BotCommand
+from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -14,10 +14,12 @@ from telegram.ext import (
     filters,
     ContextTypes,
     ConversationHandler,
+    CallbackQueryHandler,
 )
 from telegram.constants import ChatAction
 from typing import Optional, List
 from urllib.parse import urlparse
+from datetime import datetime, timedelta
 
 import config
 from src.handlers.download import process_terabox_link
@@ -54,55 +56,69 @@ class TeraboxBot:
             username=user.username
         )
         
-        welcome_message = f"""
-🎬 Welcome to Terabox Video Downloader Bot!
+        # Get user premium status
+        user_data = db.get_user(user_id)
+        is_premium = user_data.get('is_premium', False) if user_data else False
+        
+        welcome_message = f"""👋 **Welcome to Terabox Downloader Bot!**
 
-👋 Hello {user.first_name}!
+Hi {user.first_name}! 
 
-I can help you download videos from Terabox links.
+🎥 I can download videos from Terabox links for you.
 
-📝 Simply send me a Terabox link like:
-• https://terabox.com/s/...
-• https://terabox.com/folder/...
+📝 **How to use:**
+1. Send me a Terabox link
+2. I'll download it
+3. Get your video back instantly
 
-⚠️ Features:
-✅ Download video files
-✅ Automatic format detection
-✅ Direct Telegram upload (when size permits)
-✅ Download history tracking
+⭐ **Premium Benefits:**
+• 🔄 Auto-upload videos to your channel
+• 📊 Priority support
+• ⚡ Faster processing
 
-🔒 Privacy: Links are processed but not stored.
-
-Use /help for more information.
-        """
-        await update.message.reply_text(welcome_message)
+Use the menu below to explore features!
+"""
+        await update.message.reply_text(welcome_message, parse_mode='Markdown', reply_markup=self.get_main_keyboard(is_premium))
         return WAITING_FOR_LINK
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /help command"""
-        help_message = """
-📚 Help - Available Commands:
+        help_message = """❓ **Help - Available Commands:**
 
-/start - Show welcome message
-/help - Show this help message
-/cancel - Cancel current operation
+**/start** - Show welcome and main menu
+**/stats** - View your download statistics  
+**/help** - Show this help message
+**/cancel** - Cancel current operation
 
-🔗 How to use:
+🔗 **How to Use:**
 1. Send me a Terabox link
 2. I'll download the video
-3. Send it back to you on Telegram
+3. You get it back instantly
+
+📊 **Link Format Examples:**
+• https://terabox.com/s/...
+• https://terabox.com/folder/...
+• https://1024terabox.com/s/...
+• https://teraboxlink.com/s/...
+
+⭐ **Premium Features:**
+• 🔄 Auto-upload to your channel
+• 📊 Priority support
+• ⚡ Faster processing
 
 ⏱️ Processing time depends on video size.
-📊 Max file size: 2GB
-
-⚠️ Note: Very large files may take time to process.
-        """
-        await update.message.reply_text(help_message)
+📥 Max file size: 2GB
+"""
+        await update.message.reply_text(help_message, parse_mode='Markdown', reply_markup=self.get_back_keyboard())
     
     async def cancel_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """Handle /cancel command"""
-        await update.message.reply_text("Operation cancelled. Send another link or use /start")
+        await update.message.reply_text("❌ Operation cancelled. Send another link or use /start", reply_markup=self.get_back_keyboard())
         return ConversationHandler.END
+    
+    async def stats_command_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /stats command"""
+        await self.stats_command(update, context)
     
     def extract_terabox_links(self, text: str) -> List[str]:
         """Extract all Terabox links from text
@@ -427,12 +443,28 @@ Use /help for more information.
                     except Exception as e:
                         logger.warning(f"Failed to send to store channel: {e}")
                 
+                # Send to premium user's auto-upload channel if enabled
+                auto_upload_channel = db.get_auto_upload_channel(user_id)
+                if auto_upload_channel:
+                    try:
+                        with open(file_path, 'rb') as video_file:
+                            await self.app.bot.send_video(
+                                chat_id=auto_upload_channel,
+                                video=video_file,
+                                caption=f"📹 {filename}\n📊 Size: {file_size_mb:.1f}MB\n\n✅ Auto-uploaded via bot",
+                                write_timeout=300
+                            )
+                        logger.info(f"Auto-uploaded to premium user's channel {auto_upload_channel}: {filename}")
+                    except Exception as e:
+                        logger.warning(f"Failed to auto-upload to {auto_upload_channel}: {e}")
+                        await update.message.reply_text(f"⚠️ Failed to auto-upload: {str(e)[:100]}")
+                
                 # Update message to show completion
                 await processing_msg.edit_text(
                     "✅ **Download Complete**\n\n"
                     f"📹 {filename}\n"
                     f"📊 Size: {file_size_mb:.1f}MB\n\n"
-                    "✔️ Video uploaded and archived in store channel!"
+                    f"✔️ Video {'auto-uploaded to your channel and ' if auto_upload_channel else ''}archived!"
                 )
                 
                 # Clean up the file
@@ -458,7 +490,210 @@ Use /help for more information.
         
         return WAITING_FOR_LINK
 
+    # ============= UI METHODS (INLINE KEYBOARDS) =============
     
+    def get_main_keyboard(self, is_premium: bool = False) -> InlineKeyboardMarkup:
+        """Create main menu keyboard"""
+        buttons = [
+            [InlineKeyboardButton("📊 Stats", callback_data="stats"),
+             InlineKeyboardButton("❓ Help", callback_data="help")],
+            [InlineKeyboardButton("⭐ Premium", callback_data="premium")]
+        ]
+        
+        if is_premium:
+            buttons.insert(1, [InlineKeyboardButton("🔄 Auto-Upload Setup", callback_data="auto_upload")])
+        
+        return InlineKeyboardMarkup(buttons)
+    
+    def get_premium_keyboard(self) -> InlineKeyboardMarkup:
+        """Create premium menu keyboard"""
+        buttons = [
+            [InlineKeyboardButton("✅ Activate Premium (30 days)", callback_data="activate_premium")],
+            [InlineKeyboardButton("🔄 Auto-Upload Setup", callback_data="auto_upload")],
+            [InlineKeyboardButton("⬅️ Back", callback_data="back_main")]
+        ]
+        return InlineKeyboardMarkup(buttons)
+    
+    def get_back_keyboard(self) -> InlineKeyboardMarkup:
+        """Create back button keyboard"""
+        buttons = [[InlineKeyboardButton("⬅️ Back to Menu", callback_data="back_main")]]
+        return InlineKeyboardMarkup(buttons)
+    
+    async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /stats command or stats callback"""
+        user_id = update.message.from_user.id if update.message else update.callback_query.from_user.id
+        
+        # Get user stats from database
+        user_stats = db.get_user_stats(user_id)
+        downloads_count = user_stats.get('downloads_count', 0)
+        join_date = user_stats.get('join_date', datetime.now())
+        
+        # Get full user data for premium info
+        user_data = db.get_user(user_id)
+        is_premium = user_data.get('is_premium', False)
+        premium_until = user_data.get('premium_until', None)
+        
+        # Format join date
+        if isinstance(join_date, str):
+            join_date = datetime.fromisoformat(join_date)
+        days_member = (datetime.now() - join_date).days if join_date else 0
+        
+        # Create stats message
+        stats_msg = f"""📊 **Your Statistics**
+
+👤 User ID: `{user_id}`
+📥 Total Downloads: **{downloads_count}**
+📅 Member Since: **{join_date.strftime('%d %B %Y') if join_date else 'Unknown'}**
+⏳ Days as Member: **{days_member}**
+
+{'⭐ **PREMIUM** Status: **Active**' if is_premium else '⭐ **PREMIUM** Status: **Inactive**'}
+{f"✅ Premium Until: **{premium_until.strftime('%d %B %Y')}**" if premium_until and is_premium else ''}
+
+💡 Tip: Upgrade to Premium for Auto-Upload feature!
+"""
+        
+        if update.message:
+            await update.message.reply_text(stats_msg, parse_mode='Markdown', reply_markup=self.get_back_keyboard())
+        else:
+            await update.callback_query.edit_message_text(stats_msg, parse_mode='Markdown', reply_markup=self.get_back_keyboard())
+    
+    async def premium_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle premium menu"""
+        query = update.callback_query
+        user_id = query.from_user.id
+        
+        # Get user premium status
+        user_data = db.get_user(user_id)
+        is_premium = user_data.get('is_premium', False)
+        premium_until = user_data.get('premium_until', None)
+        
+        premium_msg = f"""⭐ **PREMIUM FEATURES**
+
+Current Status: {'✅ Active' if is_premium else '❌ Inactive'}
+{f"Valid Until: {premium_until.strftime('%d %B %Y')}" if is_premium and premium_until else ''}
+
+🎁 **Premium Benefits:**
+• 🔄 Auto-Upload to Your Channel
+• 📊 Priority Support
+• ⚡ Faster Processing
+• 🎯 Bulk Download Support
+
+💰 Price: Free for first 30 days trial!
+"""
+        
+        await query.edit_message_text(premium_msg, parse_mode='Markdown', reply_markup=self.get_premium_keyboard())
+    
+    async def activate_premium(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle premium activation"""
+        query = update.callback_query
+        user_id = query.from_user.id
+        
+        # Set premium for 30 days
+        premium_until = datetime.now() + timedelta(days=30)
+        db.set_premium(user_id, True, premium_until)
+        
+        activate_msg = """✅ **Premium Activated!**
+
+🎉 You now have 30 days of Premium access!
+
+🔄 Auto-Upload Feature is ready to use.
+Visit the Premium menu to set up your channel.
+
+Thank you for supporting us! 💖
+"""
+        
+        await query.edit_message_text(activate_msg, parse_mode='Markdown', reply_markup=self.get_back_keyboard())
+    
+    async def setup_auto_upload(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle auto-upload setup"""
+        query = update.callback_query
+        user_id = query.from_user.id
+        
+        # Check if user is premium
+        user_data = db.get_user(user_id)
+        is_premium = user_data.get('is_premium', False)
+        
+        if not is_premium:
+            await query.edit_message_text(
+                "❌ **Auto-Upload is a Premium Feature**\n\n"
+                "Please activate Premium first to use this feature.",
+                parse_mode='Markdown',
+                reply_markup=self.get_back_keyboard()
+            )
+            return
+        
+        # Ask for channel ID
+        setup_msg = """🔄 **Auto-Upload Setup**
+
+Please send me your channel ID where you want videos to be auto-uploaded.
+
+You can find your channel ID by:
+1. Open your channel
+2. Click on channel name
+3. Copy the number from URL: https://t.me/c/YOUR_CHANNEL_ID
+
+Format: Send as -100xxxxxxxxxx or just the number
+"""
+        
+        context.user_data['awaiting_channel_id'] = True
+        await query.edit_message_text(setup_msg, parse_mode='Markdown', reply_markup=self.get_back_keyboard())
+    
+    async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle all button callbacks"""
+        query = update.callback_query
+        await query.answer()
+        
+        callback_data = query.data
+        
+        if callback_data == "stats":
+            await self.stats_command(update, context)
+        elif callback_data == "help":
+            help_message = """❓ **Help - How to Use**
+
+1️⃣ **Send Terabox Link**
+   Send me any Terabox link (can be mixed with other text)
+
+2️⃣ **I'll Download It**
+   Processing video...
+
+3️⃣ **Get Your Video**
+   Video will be sent to you on Telegram
+
+📝 **Supported Link Types:**
+   • Share links (/s/)
+   • Folder links (/folder/)
+   • All Terabox domains
+
+⭐ **Premium Features:**
+   • Auto-upload videos to your channel
+   • Get started with /premium command
+
+🔧 **Commands:**
+   /start - Main menu
+   /stats - Your statistics
+   /premium - Premium features
+   /cancel - Cancel operation
+"""
+            await query.edit_message_text(help_message, parse_mode='Markdown', reply_markup=self.get_back_keyboard())
+        elif callback_data == "premium":
+            await self.premium_menu(update, context)
+        elif callback_data == "activate_premium":
+            await self.activate_premium(update, context)
+        elif callback_data == "auto_upload":
+            await self.setup_auto_upload(update, context)
+        elif callback_data == "back_main":
+            user_id = query.from_user.id
+            user_data = db.get_user(user_id)
+            is_premium = user_data.get('is_premium', False)
+            
+            main_msg = """👋 **Welcome to Terabox Downloader**
+
+🎥 Send me a Terabox link and I'll download the video for you!
+
+Use the buttons below to access features:
+"""
+            await query.edit_message_text(main_msg, parse_mode='Markdown', reply_markup=self.get_main_keyboard(is_premium))
+
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle errors"""
         logger.error(f"Update {update} caused error {context.error}")
@@ -488,6 +723,8 @@ Use /help for more information.
         # Add handlers
         self.app.add_handler(conv_handler)
         self.app.add_handler(CommandHandler("help", self.help_command))
+        self.app.add_handler(CommandHandler("stats", self.stats_command_handler))
+        self.app.add_handler(CallbackQueryHandler(self.button_callback))
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_link))
         # Also handle captions from media (photo, document, video, etc.) outside conversation
         self.app.add_handler(MessageHandler(filters.CAPTION, self.handle_link_from_caption))
@@ -496,7 +733,8 @@ Use /help for more information.
     async def set_commands(self) -> None:
         """Set bot commands"""
         commands = [
-            BotCommand("start", "Start the bot"),
+            BotCommand("start", "Start the bot and show main menu"),
+            BotCommand("stats", "Show your download statistics"),
             BotCommand("help", "Show help message"),
             BotCommand("cancel", "Cancel current operation"),
         ]

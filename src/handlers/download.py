@@ -49,9 +49,39 @@ async def fetch_stream_url(terabox_url: str) -> Optional[Tuple[str, str]]:
     logger.info(f"Fetching stream URL for: {terabox_url} -> {api_url}")
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=config.TIMEOUT)) as response:
-                logger.info(f"API Response Status: {response.status}")
+        # Use browser-like headers for API call and retry once if anti-bot page detected
+        api_headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
+            'Referer': 'https://terabox.com/',
+            'Accept': '*/*',
+        }
+
+        async with aiohttp.ClientSession(headers=api_headers) as session:
+            # Try a couple of times if the API returns an anti-bot page
+            anti_bot_detected = False
+            for attempt in range(2):
+                async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=config.TIMEOUT)) as response:
+                    logger.info(f"API Response Status: {response.status}")
+
+                    # If Cloudflare/anti-bot HTML returned, retry once
+                    try:
+                        peek = await response.text()
+                    except Exception:
+                        peek = ''
+                    if response.status in (403, 520) or 'Bot Verification' in peek or 'recaptcha' in peek.lower():
+                        logger.warning(f"API appears to be protected by anti-bot (status {response.status}). Attempt {attempt+1}.")
+                        anti_bot_detected = True
+                        if attempt == 0:
+                            await asyncio.sleep(1)
+                            continue
+                        else:
+                            # proceed to fallback extraction below
+                            text = peek
+                            logger.debug("Proceeding to fallback extraction after anti-bot detection")
+                    else:
+                        # normal flow: try JSON / text parsing below
+                        # reset stream to beginning by using peek as text
+                        text = peek
                 
                 if response.status == 404:
                     logger.error(f"API returned 404 - Link may be invalid or expired")
@@ -131,7 +161,7 @@ async def fetch_stream_url(terabox_url: str) -> Optional[Tuple[str, str]]:
                 # Search for m3u8 (HLS stream) URLs - handle escaped JSON strings too
                 m3u8_patterns = [
                     r'(https?://[^\s"\'<>]*\.m3u8[^\s"\'<>]*)',  # plain URL
-                    r'"([^"]*\.m3u8[^"]*)"',  # m3u8 inside quotes
+                        r'["\'](https?://[^"\']*?\.m3u8[^"\']*)["\']',  # m3u8 inside quotes (must be a URL)
                 ]
                 for pattern in m3u8_patterns:
                     m3u8_match = re.search(pattern, text)
@@ -146,7 +176,7 @@ async def fetch_stream_url(terabox_url: str) -> Optional[Tuple[str, str]]:
                 # Search for mp4 URLs
                 mp4_patterns = [
                     r'(https?://[^\s"\'<>]*\.mp4[^\s"\'<>]*)',  # plain URL
-                    r'"([^"]*\.mp4[^"]*)"',  # mp4 inside quotes
+                        r'["\'](https?://[^"\']*?\.mp4[^"\']*)["\']',  # mp4 inside quotes (must be a URL)
                 ]
                 for pattern in mp4_patterns:
                     mp4_match = re.search(pattern, text)
@@ -156,6 +186,58 @@ async def fetch_stream_url(terabox_url: str) -> Optional[Tuple[str, str]]:
                         filename = os.path.basename(urlparse(stream_url).path) or 'terabox_video.mp4'
                         logger.info(f"Found mp4 stream URL: {stream_url[:80]}")
                         return stream_url, filename
+
+                # If we couldn't extract from the iTeraPlay API response, try fetching the original Terabox page
+                logger.info("Attempting fallback: fetch Terabox page directly to extract stream URL")
+                try:
+                    # Browser-like headers to avoid simple bot blocks
+                    page_headers = {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Referer': 'https://terabox.com/'
+                    }
+                    async with session.get(terabox_url, headers=page_headers, timeout=aiohttp.ClientTimeout(total=config.TIMEOUT), ssl=False, allow_redirects=True) as page_resp:
+                        logger.info(f"Terabox page response status: {page_resp.status}")
+                        if page_resp.status == 200:
+                            page_text = await page_resp.text()
+
+                            # Try the same extraction logic on the page
+                            for resolution in ["360p", "480p", "720p", "1080p", "playUrl"]:
+                                pattern = rf'"{resolution}"\s*:\s*"([^\"]+)"'
+                                match = re.search(pattern, page_text)
+                                if match:
+                                    stream_url = match.group(1).replace('\\/', '/')
+                                    filename = f'terabox_video_{resolution}.mp4'
+                                    logger.info(f"Found {resolution} stream URL on page: {stream_url[:80]}")
+                                    return stream_url, filename
+
+                            # m3u8 on page
+                            for pattern in m3u8_patterns:
+                                m3u8_match = re.search(pattern, page_text)
+                                if m3u8_match:
+                                    stream_url = m3u8_match.group(1).replace('\\/', '/').replace('\\:', ':')
+                                    filename = 'terabox_video.mp4'
+                                    logger.info(f"Found m3u8 stream URL on page: {stream_url[:80]}")
+                                    return stream_url, filename
+
+                            # mp4 on page
+                            for pattern in mp4_patterns:
+                                mp4_match = re.search(pattern, page_text)
+                                if mp4_match:
+                                    stream_url = mp4_match.group(1).replace('\\/', '/').replace('\\:', ':')
+                                    filename = os.path.basename(urlparse(stream_url).path) or 'terabox_video.mp4'
+                                    logger.info(f"Found mp4 stream URL on page: {stream_url[:80]}")
+                                    return stream_url, filename
+                        else:
+                            logger.warning(f"Terabox page returned status {page_resp.status}")
+                except Exception as e:
+                    logger.debug(f"Fallback page fetch failed: {e}")
+
+                # If anti-bot detected, raise a specific error so caller can inform the user
+                if anti_bot_detected:
+                    logger.error("Anti-bot protection detected when fetching stream URL")
+                    raise RuntimeError("anti-bot-detected")
 
                 logger.warning(f"Unable to extract stream URL from API response (response length: {len(text)})")
                 return None, None

@@ -34,4 +34,4 @@ MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", 2147483648))  # 2GB default
 TIMEOUT = int(os.getenv("TIMEOUT", 30))
 
 # Bot Configuration
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "DEBUG")

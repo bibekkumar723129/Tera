@@ -111,12 +111,16 @@ Use /help for more information.
         - Links mixed with other text
         - Different Terabox URL formats (terabox.com, 1024terabox.com, teraboxlink.com, etc.)
         - Both /s/ (share) and /folder/ links
+        - Emojis and special characters before/after links
         """
         # More flexible pattern that matches any terabox variant domain
         # Matches: terabox.com, 1024terabox.com, teraboxlink.com, etc.
+        # Pattern allows for any characters (including emojis) before the URL
         terabox_pattern = r'https?://[a-zA-Z0-9.]*terabox[a-zA-Z0-9.]*\.com/(?:s|folder)/[a-zA-Z0-9_-]+'
         
         links = re.findall(terabox_pattern, text, re.IGNORECASE)
+        
+        logger.debug(f"Regex extraction from text: '{text[:100]}...' found {len(links)} link(s)")
         
         # Remove duplicates while preserving order
         seen = set()
@@ -126,6 +130,7 @@ Use /help for more information.
                 seen.add(link)
                 unique_links.append(link)
         
+        logger.debug(f"Final unique links: {unique_links}")
         return unique_links
     
     async def handle_link(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[int]:
@@ -134,6 +139,7 @@ Use /help for more information.
         user_id = update.message.from_user.id
         
         logger.info(f"User {user_id} sent: {user_message[:50]}...")
+        logger.debug(f"Full message text: {repr(user_message)}")
         
         # Show typing indicator
         await update.message.chat.send_action(ChatAction.TYPING)

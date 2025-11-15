@@ -144,19 +144,9 @@ Use /help for more information.
         # Show typing indicator
         await update.message.chat.send_action(ChatAction.TYPING)
         
-        # Extract all Terabox links from the message
+        # Extract all Terabox links from the message using regex (most reliable method)
         links = self.extract_terabox_links(user_message)
-        
-        # Also check message entities for URL links (in case they're formatted as clickable links)
-        if update.message.entities:
-            logger.debug(f"Message has {len(update.message.entities)} entities")
-            for entity in update.message.entities:
-                if entity.type == 'url':
-                    # Extract the URL from the message
-                    url = user_message[entity.offset:entity.offset + entity.length]
-                    logger.debug(f"Found entity URL: {url}")
-                    if 'terabox' in url.lower() and url not in links:
-                        links.append(url)
+        logger.debug(f"Extracted {len(links)} link(s) using regex: {links}")
         
         if not links:
             await update.message.reply_text(

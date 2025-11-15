@@ -147,6 +147,17 @@ Use /help for more information.
         # Extract all Terabox links from the message
         links = self.extract_terabox_links(user_message)
         
+        # Also check message entities for URL links (in case they're formatted as clickable links)
+        if update.message.entities:
+            logger.debug(f"Message has {len(update.message.entities)} entities")
+            for entity in update.message.entities:
+                if entity.type == 'url':
+                    # Extract the URL from the message
+                    url = user_message[entity.offset:entity.offset + entity.length]
+                    logger.debug(f"Found entity URL: {url}")
+                    if 'terabox' in url.lower() and url not in links:
+                        links.append(url)
+        
         if not links:
             await update.message.reply_text(
                 "❌ No Terabox links found in your message.\n\n"

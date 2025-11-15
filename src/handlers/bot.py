@@ -698,10 +698,14 @@ Use the buttons below to access features:
         """Handle errors"""
         logger.error(f"Update {update} caused error {context.error}")
         
+        # Only respond to user messages, not channel posts or other updates
         if update and update.message:
-            await update.message.reply_text(
-                "❌ An unexpected error occurred. Please try again."
-            )
+            try:
+                await update.message.reply_text(
+                    "❌ An unexpected error occurred. Please try again."
+                )
+            except Exception as e:
+                logger.error(f"Failed to send error message: {e}")
     
     def setup_handlers(self) -> None:
         """Setup all command and message handlers"""

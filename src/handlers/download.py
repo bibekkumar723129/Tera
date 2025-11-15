@@ -208,7 +208,7 @@ async def fetch_stream_url(terabox_url: str) -> Optional[Tuple[str, str]]:
                                 match = re.search(pattern, page_text)
                                 if match:
                                     stream_url = match.group(1).replace('\\/', '/')
-                                    filename = f'terabox_video_{resolution}.mp4'
+                                    filename = f'@AdultsVideoLink_{resolution}.mp4'
                                     logger.info(f"Found {resolution} stream URL on page: {stream_url[:80]}")
                                     return stream_url, filename
 

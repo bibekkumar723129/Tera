@@ -1,0 +1,12 @@
+nohup: ignoring input
+2025-11-15 07:40:27,155 - __main__ - INFO - ==================================================
+2025-11-15 07:40:27,155 - __main__ - INFO - Terabox Video Downloader Bot
+2025-11-15 07:40:27,155 - __main__ - INFO - ==================================================
+2025-11-15 07:40:27,155 - __main__ - INFO - Initializing Terabox Downloader Bot...
+2025-11-15 07:40:27,156 - __main__ - INFO - Download directory: ./downloads
+2025-11-15 07:40:27,361 - src.database - INFO - Successfully connected to MongoDB
+2025-11-15 07:40:27,361 - __main__ - INFO - MongoDB connected successfully
+2025-11-15 07:40:27,361 - __main__ - INFO - Bot instance created
+2025-11-15 07:40:27,361 - __main__ - INFO - Starting bot and HTTP server...
+2025-11-15 07:40:27,361 - __main__ - INFO - HTTP server will listen on port 8000
+2025-11-15 07:40:27,362 - __main__ - ERROR - Fatal error: [Errno 98] error while attempting to bind on address ('0.0.0.0', 8000): address already in use

@@ -89,7 +89,7 @@ class TeraboxBot:
             user_data = db.get_user(user_id)
             is_premium = user_data.get('is_premium', False) if user_data else False
             
-            daily_limit = int(os.getenv('PREMIUM_DAILY_DOWNLOADS', 100)) \
+            daily_limit = int(os.getenv('PREMIUM_DAILY_DOWNLOADS', 9999999)) \
                 if is_premium else int(os.getenv('FREE_DAILY_DOWNLOADS', 5))
             
             await context.bot.send_message(

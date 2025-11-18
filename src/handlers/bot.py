@@ -277,7 +277,7 @@ Hi {user.first_name}!
                         await processing_msg.edit_text(
                             "❌ **Download Failed**\n\n"
                             "⚠️ The API is protected with reCAPTCHA.\n\n"
-                            "Please try again later."
+                            "Please try again later.\n\n {link[:50]}\n{link}"
                         )
                         continue
                     else:
@@ -285,7 +285,7 @@ Hi {user.first_name}!
                         await processing_msg.edit_text(
                             f"❌ **Download Failed**\n\n"
                             f"Error: {str(re_err)}\n\n"
-                            "Please try again or use a different link."
+                            "Please try again or use a different link.\n\n {link[:50]}\n{link}"
                         )
                         continue
                 
@@ -294,7 +294,7 @@ Hi {user.first_name}!
                     await processing_msg.edit_text(
                         "❌ **Download Failed**\n\n"
                         "Could not extract video from the link.\n\n"
-                        "Please check if the link is valid and try again."
+                        "Please check if the link is valid and try again.\n\n {link}"
                     )
                     continue
                 
@@ -373,7 +373,7 @@ Hi {user.first_name}!
                     await processing_msg.edit_text(
                         f"❌ **An Error Occurred**\n\n"
                         f"Error: {str(e)}\n\n"
-                        "Please try again."
+                        "Please try again.\n\n{link}"
                     )
                 except:
                     pass
@@ -456,7 +456,7 @@ Hi {user.first_name}!
                         await processing_msg.edit_text(
                             "❌ **Download Failed**\n\n"
                             "⚠️ The API is protected with reCAPTCHA.\n\n"
-                            "Please try again later."
+                            "Please try again later.{link}"
                         )
                         continue
                     else:
@@ -464,7 +464,7 @@ Hi {user.first_name}!
                         await processing_msg.edit_text(
                             f"❌ **Download Failed**\n\n"
                             f"Error: {str(re_err)}\n\n"
-                            "Please try again or use a different link."
+                            "Please try again or use a different link.{link}"
                         )
                         continue
                 
@@ -473,7 +473,7 @@ Hi {user.first_name}!
                     await processing_msg.edit_text(
                         "❌ **Download Failed**\n\n"
                         "Could not extract video from the link.\n\n"
-                        "Please check if the link is valid and try again."
+                        "Please check if the link is valid and try again.{link}"
                     )
                     continue
                 
@@ -568,7 +568,7 @@ Hi {user.first_name}!
                     await processing_msg.edit_text(
                         f"❌ **An Error Occurred**\n\n"
                         f"Error: {str(e)}\n\n"
-                        "Please try again."
+                        "Please try again.{link}"
                     )
                 except:
                     pass

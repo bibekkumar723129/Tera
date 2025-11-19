@@ -249,7 +249,7 @@ class Database:
                 self.add_user(user_id)
                 user = self.users_collection.find_one({'user_id': user_id})
             
-            daily_limit = int(os.getenv('PREMIUM_DAILY_DOWNLOADS', 100)) \
+            daily_limit = int(os.getenv('PREMIUM_DAILY_DOWNLOADS', 99999)) \
                 if user.get('is_premium') \
                 else int(os.getenv('FREE_DAILY_DOWNLOADS', 5))
             

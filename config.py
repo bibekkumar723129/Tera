@@ -26,7 +26,7 @@ ADMIN_ID = os.getenv("ADMIN_ID")
 STORE_CHANNEL = os.getenv("STORE_CHANNEL", "-1003292407667")
 
 # API Configuration
-TERABOX_API = "https://iteraplay.com/api/play.php?url={url}&key=iTeraPlay2025"
+TERABOX_API = ""
 
 # Download Configuration
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "./downloads")
